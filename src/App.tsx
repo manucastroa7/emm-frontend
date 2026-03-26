@@ -98,6 +98,14 @@ function AppContent() {
   const [showAddNota, setShowAddNota] = useState(false);
   const [newMateria, setNewMateria] = useState('');
   const [newNota, setNewNota] = useState('');
+
+  const isAnaliticoCompleto = (student: StudentData) => {
+    const required = getSubjectsByLicencia(student.licencia || '');
+    if (required.length === 0) return true;
+    return required.every(sub =>
+      student.notas?.some(n => n.materia.toUpperCase() === sub.toUpperCase() && n.nota > 0)
+    );
+  };
   // Mapa de notas pendientes de guardar (materia -> valor editado)
   const [pendingNotas, setPendingNotas] = useState<Record<string, string>>({});
   const [savingNota, setSavingNota] = useState<string | null>(null);
@@ -336,6 +344,13 @@ function AppContent() {
     if (!id) return;
     const nuevoEstado = selectedStudent?.estado_analitico === 'emitido' ? 'borrador' : 'emitido';
 
+    // VALIDACION: Solo si pasa a emitido
+    if (nuevoEstado === 'emitido' && selectedStudent) {
+      if (!isAnaliticoCompleto(selectedStudent)) {
+        toast.error("⚠️ Analítico Incompleto: Faltan materias obligatorias.");
+      }
+    }
+
     const executeToggle = async (motivoAdicional = '') => {
       try {
         const res = await fetch(`${API_URL}/api/students/${id}/estado?user=${encodeURIComponent(user?.email || 'Sistema')}`, {
@@ -463,6 +478,9 @@ function AppContent() {
     window.open(`${API_URL}/api/students/${student.id}/certificate`, '_blank');
     // 2. Marcar como Emitido si todavía no lo estaba
     if (student.estado_analitico !== 'emitido') {
+      if (!isAnaliticoCompleto(student)) {
+        toast.error("⚠️ Generado: Faltan notas obligatorias.");
+      }
       try {
         const res = await fetch(
           `${API_URL}/api/students/${student.id}/estado?user=${encodeURIComponent(user?.email || 'Sistema')}`,
@@ -780,8 +798,8 @@ function AppContent() {
                   </div>
 
                   <div className="flex items-center justify-between w-full md:w-auto gap-4 border-t md:border-0 pt-3 md:pt-0 border-slate-100">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold md:hidden lg:inline-block uppercase tracking-wider border ${student.estado_analitico === 'emitido' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                      {student.estado_analitico === 'emitido' ? 'Emitido' : 'Borrador'}
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold md:hidden lg:inline-block uppercase tracking-wider border ${student.estado_analitico === 'emitido' ? (isAnaliticoCompleto(student) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200') : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                      {student.estado_analitico === 'emitido' ? (isAnaliticoCompleto(student) ? 'Emitido' : 'Generado: Faltan Notas') : 'Borrador'}
                     </span>
                     {student.situacion && student.situacion !== 'DUPLICADO' && (
                       <span className="md:hidden lg:inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider rounded-lg border border-indigo-100 whitespace-nowrap">
@@ -955,6 +973,15 @@ function AppContent() {
 
               {/* Modal Body */}
               <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                {selectedStudent.estado_analitico === 'emitido' && !isAnaliticoCompleto(selectedStudent) && (
+                  <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-800 animate-pulse shadow-sm">
+                    <AlertTriangle className="w-6 h-6 shrink-0" />
+                    <div>
+                      <p className="font-bold text-sm text-amber-900 leading-tight">⚠️ Analítico Generado: Faltan Notas</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Marcado como emitido pero con materias obligatorias pendientes.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   <div className="bg-blue-50 p-4 border border-blue-100 rounded-2xl">
                     <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest">Licencia / Carrera</p>
