@@ -471,11 +471,24 @@ function AppContent() {
     window.open(`${API_URL}/api/students/${student.id}/certificate`, '_blank');
   };
 
+  const downloadDiploma = (student: StudentData) => {
+    if (!student.id) { alert("El alumno no tiene ID registrado."); return; }
+    window.open(`${API_URL}/api/students/${student.id}/diploma`, '_blank');
+  };
+
   // Descarga el PDF y marca automáticamente como Emitido
   const downloadPDFAndEmit = async (student: StudentData) => {
     if (!student.id) { alert("El alumno no tiene ID registrado."); return; }
-    // 1. Descargar
-    window.open(`${API_URL}/api/students/${student.id}/certificate`, '_blank');
+
+    // VALIDACION: Solo si tiene todas las notas
+    if (!isAnaliticoCompleto(student)) {
+      toast.error("⚠️ Generado: Faltan notas obligatorias.");
+    }
+
+    // 1. Descargar Analítico y Diploma
+    downloadPDF(student);
+    setTimeout(() => downloadDiploma(student), 800);
+
     // 2. Marcar como Emitido si todavía no lo estaba
     if (student.estado_analitico !== 'emitido') {
       if (!isAnaliticoCompleto(student)) {
@@ -828,6 +841,15 @@ function AppContent() {
                           title="Descargar Analítico"
                         >
                           <Download className="w-5 h-5" />
+                        </button>
+                      )}
+                      {student.estado_analitico === 'emitido' && (
+                        <button
+                          onClick={() => downloadDiploma(student)}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 rounded-lg transition-colors"
+                          title="Descargar Diploma"
+                        >
+                          <School className="w-5 h-5" />
                         </button>
                       )}
                     </div>
@@ -1225,6 +1247,17 @@ function AppContent() {
                       title="Eliminar solo las notas (Quedar en Borrador)"
                     >
                       <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+
+                  {/* Descargar Diploma — solo si ya está emitido */}
+                  {selectedStudent.estado_analitico === 'emitido' && (
+                    <button
+                      onClick={() => downloadDiploma(selectedStudent)}
+                      className="px-5 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900"
+                      title="Descargar Diploma de Licencia"
+                    >
+                      <School className="w-4 h-4" /> Diploma
                     </button>
                   )}
 
