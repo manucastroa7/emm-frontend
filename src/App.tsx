@@ -20,7 +20,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { type StudentData as BaseStudentData, getSubjectsByLicencia } from './services/pdfService';
 
-type UserRole = 'admin' | 'operadora' | 'student';
+type UserRole = 'admin' | 'editor' | 'viewer' | 'student';
 
 interface UserProfile {
   email: string;
@@ -36,6 +36,7 @@ interface StudentData extends BaseStudentData {
   comision?: string;
   situacion?: string;
   estado_analitico?: 'borrador' | 'emitido';
+  diploma_emitido?: boolean;
   fecha_emision?: string;
   fecha_fin_cursada?: string;
   historial?: any[];
@@ -89,6 +90,7 @@ function AppContent() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserNombre, setNewUserNombre] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'editor' | 'viewer'>('editor');
 
   // Modal de confirmación personalizado
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: (val: string) => void; type?: 'danger' | 'warning' | 'info'; withInput?: boolean; inputLabel?: string; inputPlaceholder?: string }>({ open: false, title: '', message: '', onConfirm: () => { } });
@@ -179,7 +181,7 @@ function AppContent() {
         return;
       }
       setUser({ email: data.email, role: data.role, name: data.nombre });
-      if (data.role === 'operadora') setActiveTab('alumnos');
+      if (data.role !== 'admin') setActiveTab('alumnos');
       setError('');
     } catch (err) {
       setError('Error de conexión con el servidor');
@@ -204,7 +206,7 @@ function AppContent() {
     const res = await fetch(`${API_URL}/api/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: newUserEmail, nombre: newUserNombre, password: newUserPassword })
+      body: JSON.stringify({ email: newUserEmail, nombre: newUserNombre, password: newUserPassword, role: newUserRole })
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Error'); return; }
@@ -381,6 +383,8 @@ function AppContent() {
   const handleGenerateDiploma = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!diplomaModal.student) return;
+    if (user?.role === 'viewer') { toast.error('Solo lectura: no puedes emitir diplomas.'); return; }
+    if (!isAnaliticoCompleto(diplomaModal.student)) { toast.error('Analítico incompleto: faltan notas obligatorias.'); return; }
 
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -657,6 +661,8 @@ try {
   // Solo descarga el PDF sin cambiar el estado (Vista Previa)
   const downloadPDF = (student: StudentData) => {
     if (!student.id) { alert("El alumno no tiene ID registrado."); return; }
+    if (user?.role === 'viewer') { toast.error('Solo lectura: no puedes generar PDFs.'); return; }
+    if (!isAnaliticoCompleto(student)) { toast.error('Analítico incompleto: faltan notas obligatorias.'); return; }
     window.open(`${API_URL}/api/students/${student.id}/certificate`, '_blank');
   };
 
@@ -670,10 +676,10 @@ try {
   // Descarga el PDF y marca automáticamente como Emitido
   const downloadPDFAndEmit = async (student: StudentData) => {
     if (!student.id) { alert("El alumno no tiene ID registrado."); return; }
-
-    // Alerta informativa pero NO bloqueante
+    if (user?.role === 'viewer') { toast.error('Solo lectura: no puedes emitir.'); return; }
     if (!isAnaliticoCompleto(student)) {
-      toast.error('⚠️ El analítico está INCOMPLETO, pero se generará igual.');
+      toast.error('Analítico incompleto: faltan notas obligatorias.');
+      return;
     }
 
     // 1. Descargar Analítico
@@ -1220,7 +1226,7 @@ try {
                         {selectedStudent.email && (
                           <span className="bg-white border border-slate-200 px-3 py-1 rounded shadow-sm">Email: {selectedStudent.email}</span>
                         )}
-                        {(user?.role === 'admin' || user?.role === 'operadora') && (
+                        {(user?.role === 'admin' || user?.role === 'editor') && (
                           <button
                             onClick={startEditDatos}
                             className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 bg-blue-50 px-2 py-0.5 rounded transition-colors"
@@ -1325,7 +1331,7 @@ try {
 
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-slate-900">Materias Aprobadas ({selectedStudent.notas?.length || 0})</h3>
-                  {(user?.role === 'admin' || user?.role === 'operadora') && (
+                  {(user?.role === 'admin' || user?.role === 'editor') && (
                     <button
                       onClick={() => setShowAddNota(prev => !prev)}
                       className="text-xs font-bold bg-blue-900 hover:bg-blue-950 text-white px-3 py-1.5 rounded-lg transition-colors"
@@ -1422,7 +1428,7 @@ try {
                           <div key={i} className={`flex justify-between items-center px-4 py-2.5 border-b border-slate-50 last:border-0 transition-colors ${tiene && !hasPending ? 'bg-white' : hasPending ? 'bg-yellow-50' : 'bg-amber-50'}`}>
                             <span className="font-medium text-slate-700 text-sm flex-1 pr-4">{materia}</span>
                             <div className="flex items-center gap-2 shrink-0">
-                              {(user?.role === 'admin' || user?.role === 'operadora') ? (
+                              {(user?.role === 'admin' || user?.role === 'editor') ? (
                                 <>
                                   <input
                                     type="number"
@@ -1522,67 +1528,83 @@ try {
                 )}
               </div>
 
-              {/* Modal Footer */}
+                                          {/* Modal Footer */}
               <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0 flex-wrap gap-4">
-                <div className="flex items-center gap-3 w-full justify-end flex-wrap mt-2">
-                  {/* Desmarcar Emitido — solo admin, solo cuando ya está emitido */}
-                  {user.role === 'admin' && selectedStudent.estado_analitico === 'emitido' && (
-                    <button
-                      onClick={() => handleToggleEstado(selectedStudent.id as any)}
-                      className="px-4 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all shadow-sm border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
-                      title="Revertir a Borrador (requiere justificación)"
-                    >
-                      ↩ Desmarcar Emitido
-                    </button>
-                  )}
+                <div className="flex flex-wrap items-center gap-3 w-full justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${selectedStudent.estado_analitico === 'emitido' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'}`}>
+                      Anal�tico {selectedStudent.estado_analitico === 'emitido' ? 'Emitido' : 'Borrador'}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${selectedStudent.diploma_emitido ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'}`}>
+                      Diploma {selectedStudent.diploma_emitido ? 'Emitido' : 'Pendiente'}
+                    </span>
+                    {!isAnaliticoCompleto(selectedStudent) && (
+                      <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-700">
+                        Incompleto (faltan notas)
+                      </span>
+                    )}
+                    {user.role === 'viewer' && (
+                      <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-700">
+                        Solo lectura
+                      </span>
+                    )}
+                  </div>
 
-                  {/* Eliminar notas — solo admin */}
-                  {user.role === 'admin' && selectedStudent.notas && selectedStudent.notas.length > 0 && (
-                    <button
-                      onClick={() => handleDeleteNotas(selectedStudent.id as any)}
-                      className="p-2.5 text-red-500 hover:bg-red-100 rounded-xl transition-colors border border-transparent hover:border-red-200"
-                      title="Eliminar solo las notas (Quedar en Borrador)"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3 w-full justify-end flex-wrap mt-2">
+                    {user.role === 'admin' && selectedStudent.estado_analitico === 'emitido' && (
+                      <button
+                        onClick={() => handleToggleEstado(selectedStudent.id as any)}
+                        className="px-4 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all shadow-sm border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
+                        title="Revertir a Borrador (requiere justificaci�n)"
+                      >
+                        ? Desmarcar Emitido
+                      </button>
+                    )}
 
-                  {/* Descargar Diploma — solo si ya está emitido */}
-                  {/* {selectedStudent.estado_analitico === 'emitido' && (
-                    <button
-                      onClick={() => downloadDiploma(selectedStudent)}
-                      className="px-5 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900"
-                      title="Descargar Diploma de Licencia"
-                    >
-                      <School className="w-4 h-4" /> Diploma
-                    </button>
-                  )} */}
+                    {user.role === 'admin' && selectedStudent.notas && selectedStudent.notas.length > 0 && (
+                      <button
+                        onClick={() => handleDeleteNotas(selectedStudent.id as any)}
+                        className="p-2.5 text-red-500 hover:bg-red-100 rounded-xl transition-colors border border-transparent hover:border-red-200"
+                        title="Eliminar solo las notas (Quedar en Borrador)"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
 
-                  {/* Vista previa — no cambia el estado */}
-                  <button
-                    onClick={() => downloadPDF(selectedStudent)}
-                    className="px-5 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900"
-                    title="Abre el PDF para verlo, sin marcarlo como Emitido"
-                  >
-                    <Download className="w-4 h-4" /> Vista Previa
-                  </button>
-
-                  {/* Generar y Emitir — descarga y marca como e                    <button */}
-                    <button
-                      onClick={() => setDiplomaModal({ isOpen: true, student: selectedStudent })}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold transition-all"
-                    >
-                      <School className="w-5 h-5" />
-                      Generar Diploma
-                    </button>
-                    <button
-                      onClick={() => downloadPDFAndEmit(selectedStudent)}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-900 hover:bg-black text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-200"
-                      title="Genera el PDF y marca el analítico como Emitido"
-                    >
-                      <Download className="w-5 h-5" />
-                      Generar Analítico PDF
-                    </button>
+                    {(() => {
+                      const disabled = !selectedStudent || !isAnaliticoCompleto(selectedStudent) || user.role === 'viewer';
+                      const disabledClasses = disabled ? ' opacity-50 cursor-not-allowed' : '';
+                      return (
+                        <>
+                          <button
+                            onClick={() => !disabled && downloadPDF(selectedStudent)}
+                            disabled={disabled}
+                            className={`px-5 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900${disabledClasses}`}
+                            title="Abre el PDF para verlo, sin marcarlo como Emitido"
+                          >
+                            <Download className="w-4 h-4" /> Vista Previa
+                          </button>
+                          <button
+                            onClick={() => !disabled && setDiplomaModal({ isOpen: true, student: selectedStudent })}
+                            disabled={disabled}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3 border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold transition-all${disabledClasses}`}
+                          >
+                            <School className="w-5 h-5" />
+                            Generar Diploma
+                          </button>
+                          <button
+                            onClick={() => !disabled && downloadPDFAndEmit(selectedStudent)}
+                            disabled={disabled}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3 bg-blue-900 hover:bg-black text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-200${disabledClasses}`}
+                            title="Genera el PDF y marca el anal�tico como Emitido"
+                          >
+                            <Download className="w-5 h-5" />
+                            Generar Anal�tico PDF
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1596,9 +1618,9 @@ try {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
       <h2 className="text-3xl font-bold text-slate-900">Gestión de Usuarios</h2>
 
-      {/* Formulario crear operadora */}
+      {/* Formulario crear editor */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <h3 className="text-lg font-bold text-slate-800 mb-4">➕ Crear Nueva Operadora</h3>
+        <h3 className="text-lg font-bold text-slate-800 mb-4">➕ Crear Nuevo Usuario</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Nombre</label>
@@ -1616,7 +1638,7 @@ try {
               value={newUserEmail}
               onChange={e => setNewUserEmail(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-900 outline-none"
-              placeholder="operadora@ejemplo.com"
+              placeholder="editor@ejemplo.com"
             />
           </div>
           <div>
@@ -1635,11 +1657,11 @@ try {
             onClick={handleCreateUser}
             className="bg-blue-900 hover:bg-blue-950 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors shadow"
           >
-            Crear Operadora
+            Crear Usuario
           </button>
         </div>
         <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-          <strong>Permisos de Operadora:</strong> Ver alumnos · Descargar PDF analítico · Editar DNI / Nombre / Apellido · Cargar Fecha de Emisión
+          <strong>Permisos Editor:</strong> Ver/editar alumnos, cargar notas y fechas. <strong>Permisos Viewer:</strong> Solo lectura (sin generar/emitir).
         </div>
       </div>
 
@@ -1833,3 +1855,9 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+
+
+
+
+
