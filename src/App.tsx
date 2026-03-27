@@ -83,6 +83,7 @@ function AppContent() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [importConfig, setImportConfig] = useState<{ isOpen: boolean; mode: 'db' | 'zip' | null }>({ isOpen: false, mode: null });
+  const [diplomaModal, setDiplomaModal] = useState<{isOpen: boolean, student: StudentData | null}>({ isOpen: false, student: null });
   // Gestión de usuarios
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -362,6 +363,48 @@ function AppContent() {
       setSelectedStudents(prev => prev.filter(id => !currentIds.includes(id)));
     } else {
       setSelectedStudents(prev => [...new Set([...prev, ...currentIds])]);
+    }
+  };
+
+  const handleGenerateDiploma = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!diplomaModal.student) return;
+
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      nacionalidad: formData.get('nacionalidad'),
+      fecha_emision: formData.get('fecha_emision'),
+      nombre: diplomaModal.student.nombre,
+      apellido: diplomaModal.student.apellido
+    };
+
+    try {
+      setIsUploading(true);
+      const res = await fetch(`${API_URL}/api/students/${diplomaModal.student.id}/diploma`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (!res.ok) throw new Error('Error al generar diploma');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Diploma_${diplomaModal.student.apellido}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      
+      setDiplomaModal({ isOpen: false, student: null });
+      // Refresh student data to show new nationality/date
+      fetchStudents();
+    } catch (err) {
+      console.error(err);
+      alert('Error generando el diploma');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -839,7 +882,6 @@ function AppContent() {
           </div>
         </div>
       )}
-
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row gap-4 mb-2">
           <div className="relative shadow-sm rounded-xl flex-1">
@@ -973,16 +1015,15 @@ function AppContent() {
                           <Download className="w-5 h-5" />
                         </button>
                       )}
-                      {/* 
-                         student.estado_analitico === 'emitido' && (
+                      {student.notas && student.notas.length > 0 && (
                         <button
-                          onClick={() => downloadDiploma(student)}
+                          onClick={() => setDiplomaModal({ isOpen: true, student })}
                           className="p-2 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 rounded-lg transition-colors"
-                          title="Descargar Diploma"
+                          title="Generar Diploma"
                         >
                           <School className="w-5 h-5" />
                         </button>
-                      ) */}
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -1039,7 +1080,62 @@ function AppContent() {
         </div>
       </div>
 
-      {/* MODAL FICHA DEL ALUMNO */}
+      {/* MODAL PARA DIPLOMA */}
+      {diplomaModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 bg-indigo-50/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                    <School className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Generar Diploma</h2>
+                </div>
+                <button onClick={() => setDiplomaModal({ isOpen: false, student: null })} className="text-slate-400 hover:text-slate-600 transition-colors bg-white p-1 rounded-full border border-slate-100 shadow-sm">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            <form onSubmit={handleGenerateDiploma} className="p-6 space-y-5">
+              <p className="text-sm text-slate-500">
+                Confirmá los datos para el diploma de <span className="font-bold text-slate-800">{diplomaModal.student?.nombre} {diplomaModal.student?.apellido}</span>.
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nacionalidad</label>
+                  <input 
+                    required 
+                    name="nacionalidad" 
+                    defaultValue={diplomaModal.student?.nacionalidad || 'ARGENTINA'} 
+                    className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 ring-indigo-100 outline-none font-medium" 
+                    placeholder="Ej: ARGENTINA"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Fecha de Emisión</label>
+                  <input 
+                    required 
+                    type="date" 
+                    name="fecha_emision" 
+                    defaultValue={diplomaModal.student?.fecha_emision || new Date().toISOString().split('T')[0]} 
+                    className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 ring-indigo-100 outline-none font-medium" 
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setDiplomaModal({ isOpen: false, student: null })} className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
+                <button type="submit" disabled={isUploading} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
+                  {isUploading ? 'Generando...' : <><Download className="w-4 h-4" />Descargar</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <AnimatePresence>
         {selectedStudent && (
           <motion.div
@@ -1414,14 +1510,22 @@ function AppContent() {
                     <Download className="w-4 h-4" /> Vista Previa
                   </button>
 
-                  {/* Generar y Emitir — descarga y marca como emitido */}
-                  <button
-                    onClick={() => downloadPDFAndEmit(selectedStudent)}
-                    className="bg-blue-900 hover:bg-blue-800 text-white px-6 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all shadow-md hover:shadow-lg"
-                    title="Genera el PDF y marca el analítico como Emitido"
-                  >
-                    <Download className="w-5 h-5" /> Generar Analítico PDF
-                  </button>
+                  {/* Generar y Emitir — descarga y marca como e                    <button */}
+                    <button
+                      onClick={() => setDiplomaModal({ isOpen: true, student: selectedStudent })}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold transition-all"
+                    >
+                      <School className="w-5 h-5" />
+                      Generar Diploma
+                    </button>
+                    <button
+                      onClick={() => downloadPDFAndEmit(selectedStudent)}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-900 hover:bg-black text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-200"
+                      title="Genera el PDF y marca el analítico como Emitido"
+                    >
+                      <Download className="w-5 h-5" />
+                      Generar Analítico PDF
+                    </button>
                 </div>
               </div>
             </motion.div>
