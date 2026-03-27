@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -90,10 +90,8 @@ function AppContent() {
   const [newUserPassword, setNewUserPassword] = useState('');
 
   // Modal de confirmación personalizado
-  const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void; type?: 'danger' | 'warning' | 'info'; withInput?: boolean; inputLabel?: string; inputPlaceholder?: string }>({ open: false, title: '', message: '', onConfirm: () => { } });
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: (val: string) => void; type?: 'danger' | 'warning' | 'info'; withInput?: boolean; inputLabel?: string; inputPlaceholder?: string }>({ open: false, title: '', message: '', onConfirm: () => { } });
   const [confirmInput, setConfirmInput] = useState('');
-  const confirmInputRef = useRef('');
-  useEffect(() => { confirmInputRef.current = confirmInput; }, [confirmInput]);
 
   const [selectedStudent, setSelectedStudent] = useState<StudentData | null>(null);
   const [editingDatos, setEditingDatos] = useState(false);
@@ -307,7 +305,7 @@ function AppContent() {
       title: 'Eliminar Alumno',
       message: '¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.',
       type: 'danger',
-      onConfirm: async () => {
+      onConfirm: async (_val: string) => {
         try {
           await fetch(`${API_URL}/api/students/${id}?user=${encodeURIComponent(user?.email || 'Sistema')}`, { method: 'DELETE' });
           setStudents(prev => prev.filter(s => s.id !== id));
@@ -327,7 +325,7 @@ function AppContent() {
       title: 'Eliminar Notas',
       message: '¿Estás seguro de que deseas eliminar las notas de este alumno? Volverá a borrador.',
       type: 'warning',
-      onConfirm: async () => {
+      onConfirm: async (_val: string) => {
         try {
           await fetch(`${API_URL}/api/students/${id}/notas?user=${encodeURIComponent(user?.email || 'Sistema')}`, { method: 'DELETE' });
           await fetchStudents();
@@ -353,8 +351,8 @@ function AppContent() {
       withInput: true,
       inputLabel: 'Confirmación',
       inputPlaceholder: 'BORRAR TODO',
-      onConfirm: async () => {
-        if (confirmInputRef.current.trim() !== 'BORRAR TODO') {
+      onConfirm: async (val: string) => {
+        if (val.trim() !== 'BORRAR TODO') {
           toast.error('La palabra de confirmación no coincide.');
           return;
         }
@@ -422,8 +420,8 @@ function AppContent() {
         withInput: true,
         inputLabel: 'Motivo',
         inputPlaceholder: 'Ej: Error en el apellido, nota incorrecta, etc.',
-        onConfirm: async () => {
-          await executeToggle(confirmInput.trim());
+        onConfirm: async (val: string) => {
+          await executeToggle(val.trim());
           setConfirmModal(prev => ({ ...prev, open: false }));
         }
       });
@@ -1588,7 +1586,7 @@ function AppContent() {
                       toast.error('Debe completar este campo.');
                       return;
                     }
-                    confirmModal.onConfirm();
+                    confirmModal.onConfirm(confirmInput);
                   }}
                   className={`px-5 py-2.5 rounded-lg text-sm font-bold text-white transition-colors shadow-sm ${confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : confirmModal.type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                 >
