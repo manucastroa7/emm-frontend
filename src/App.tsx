@@ -419,7 +419,7 @@ function AppContent() {
         setIsUploading(true);
         try {
           const res = await fetch(`${API_URL}/api/students/bulk?user=${encodeURIComponent(user?.email || 'Sistema')}`, {
-            method: 'DELETE',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: selectedStudents })
           });
