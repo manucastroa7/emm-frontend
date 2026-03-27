@@ -541,14 +541,39 @@ function AppContent() {
         headers: { 'Content-Type': 'application/json' }
       });
       if (res.ok) {
-        toast.success('Fechas guardadas correctamente');
-        fetchStudents();
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al guardar fechas');
-    }
-  };
+    toast.success('Fechas guardadas correctamente');
+    fetchStudents();
+  }
+} catch (err) {
+  console.error(err);
+  toast.error('Error al guardar fechas');
+}
+};
+
+const handleRemoveAccents = async () => {
+if (isUploading) return;
+if (!window.confirm('¿Estás seguro de que querés limpiar todos los acentos del padrón? Esto modificará permanentemente los nombres y apellidos en la base de datos.')) {
+  return;
+}
+
+try {
+  setIsUploading(true);
+  const res = await fetch(`${API_URL}/api/students/remove-accents?user=${encodeURIComponent(user?.email || 'Sistema')}`, {
+    method: 'POST'
+  });
+  const data = await res.json();
+  if (res.ok) {
+    toast.success(data.message || 'Acentos limpiados correctamente');
+    await fetchStudents();
+  } else {
+    throw new Error(data.error || 'Error al limpiar acentos');
+  }
+} catch (err: any) {
+  toast.error(err.message);
+} finally {
+  setIsUploading(false);
+}
+};
 
   const startEditDatos = () => {
     if (!selectedStudent) return;
@@ -773,6 +798,26 @@ function AppContent() {
           <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-2xl border border-amber-200 shadow-sm hover:shadow-md transition-shadow">
             <h3 className="text-amber-700 text-sm font-medium mb-3 uppercase tracking-wider">Esperando Notas</h3>
             <p className="text-4xl font-extrabold text-amber-800">{sinAnalitico}</p>
+          </div>
+        </div>
+
+        {/* Acciones Rápidas Dashboard */}
+        <div className="pt-6 border-t border-slate-200">
+          <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">⚙ Acciones de Mantenimiento</h3>
+          <div className="flex flex-wrap gap-4">
+            <button
+              onClick={handleRemoveAccents}
+              disabled={isUploading}
+              className={`flex items-center gap-3 px-6 py-4 bg-white border-2 border-slate-200 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-700 transition-all shadow-sm ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                <span className="text-xl">✨</span>
+              </div>
+              <div className="text-left">
+                <p className="text-sm">Limpiar Acentos del Padrón</p>
+                <p className="text-[10px] font-normal text-slate-400">Normaliza Nombres y Apellidos en la BD</p>
+              </div>
+            </button>
           </div>
         </div>
 
