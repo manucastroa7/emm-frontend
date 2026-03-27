@@ -24,7 +24,7 @@ export const LICENCIA_SUBJECTS: Record<string, string[]> = {
   // Licencia CB — materias exactas del certificado PDF
   "C": [
     "METODOLOGÍA DE LA ENSEÑANZA I",
-    "TÉCNICA TÁCTICA Y ESTRATEGIA I",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA I",
     "MEDICINA I",
     "FÚTBOL Y CULTURA",
     "COMPETENCIAS PARA LA VIDA",
@@ -33,7 +33,7 @@ export const LICENCIA_SUBJECTS: Record<string, string[]> = {
   ],
   "B": [
     "METODOLOGÍA DE LA ENSEÑANZA II",
-    "TÉCNICA TÁCTICA Y ESTRATEGIA II",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA II",
     "REGLAMENTO II",
     "PREPARACIÓN FÍSICA I",
     "MEDICINA II",
@@ -45,13 +45,13 @@ export const LICENCIA_SUBJECTS: Record<string, string[]> = {
   ],
   "CB": [
     "METODOLOGÍA DE LA ENSEÑANZA I",
-    "TÉCNICA TÁCTICA Y ESTRATEGIA I",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA I",
     "MEDICINA I",
     "FÚTBOL Y CULTURA",
     "COMPETENCIAS PARA LA VIDA",
     "REGLAMENTO I",
     "METODOLOGÍA DE LA ENSEÑANZA II",
-    "TÉCNICA TÁCTICA Y ESTRATEGIA II",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA II",
     "REGLAMENTO II",
     "PREPARACIÓN FÍSICA I",
     "MEDICINA II",

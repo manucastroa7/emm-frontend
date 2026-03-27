@@ -107,10 +107,14 @@ function AppContent() {
 
   const isAnaliticoCompleto = (student: StudentData) => {
     const required = getSubjectsByLicencia(student.licencia || '');
-    
-    return required.every(sub =>
-      student.notas?.some(n => n.materia.toUpperCase() === sub.toUpperCase() && n.nota > 0)
-    );
+    if (required.length === 0) return true;
+
+    const normalize = (s: string) => s.toUpperCase().replace(/,/g, '').replace(/\s+/g, ' ').trim();
+
+    return required.every(sub => {
+      const normSub = normalize(sub);
+      return student.notas?.some(n => normalize(n.materia) === normSub && n.nota > 0);
+    });
   };
   // Mapa de notas pendientes de guardar (materia -> valor editado)
   const [pendingNotas, setPendingNotas] = useState<Record<string, string>>({});
