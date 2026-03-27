@@ -310,7 +310,6 @@ function AppContent() {
           await fetch(`${API_URL}/api/students/${id}?user=${encodeURIComponent(user?.email || 'Sistema')}`, { method: 'DELETE' });
           setStudents(prev => prev.filter(s => s.id !== id));
           if (selectedStudent?.id === id) setSelectedStudent(null);
-          toast.success('Alumno eliminado correctamente.');
         } catch (err) {
           toast.error('Error al eliminar');
         }
@@ -318,7 +317,6 @@ function AppContent() {
       }
     });
   };
-
 
   const handleDeleteNotas = async (id?: string) => {
     if (!id) return;
@@ -339,6 +337,42 @@ function AppContent() {
           toast.error('Error al eliminar notas');
         }
         setConfirmModal(prev => ({ ...prev, open: false }));
+      }
+    });
+  };
+
+  const handleResetDatabase = async () => {
+    setConfirmInput('');
+    setConfirmModal({
+      open: true,
+      title: 'Reiniciar Base de Datos',
+      message: '¡ATENCIÓN! Esta acción eliminará a TODOS los alumnos, sus notas y su historial permanentemente. Para confirmar, escribí "BORRAR TODO" en el campo de abajo:',
+      type: 'danger',
+      withInput: true,
+      inputLabel: 'Confirmación',
+      inputPlaceholder: 'BORRAR TODO',
+      onConfirm: async () => {
+        if (confirmInput.trim() !== 'BORRAR TODO') {
+          toast.error('La palabra de confirmación no coincide.');
+          return;
+        }
+        setIsUploading(true);
+        try {
+          const res = await fetch(`${API_URL}/api/database/reset?user=${encodeURIComponent(user?.email || 'Sistema')}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            toast.success(data.message || 'Base de datos reiniciada.');
+            fetchStudents();
+            setSelectedStudent(null);
+          } else {
+            toast.error(data.error || 'Error al reiniciar');
+          }
+        } catch (err) {
+          toast.error('Error de conexión');
+        } finally {
+          setIsUploading(false);
+          setConfirmModal(prev => ({ ...prev, open: false }));
+        }
       }
     });
   };
@@ -670,6 +704,15 @@ function AppContent() {
 
         {user.role === 'admin' && (
           <div className="flex items-center justify-end gap-3 flex-wrap">
+            <button
+              onClick={handleResetDatabase}
+              disabled={isUploading}
+              className={`flex items-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-all shadow ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Borrar TODOS los alumnos y notas (Reset Total)"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Reiniciar BD</span>
+            </button>
             <button
               onClick={async () => {
                 if (!confirm('¿Quitar todos los acentos de los nombres y apellidos de la base de datos?')) return;
