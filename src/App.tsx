@@ -308,7 +308,7 @@ function AppContent() {
         toast.success(result.message);
         await fetchStudents();
       } else {
-        toast.error(result.error || 'Error al procesar padrÃ³n QUINTTOS');
+        toast.error(result.error || 'Error al procesar padrónn QUINTTOS');
       }
     } catch (err) {
       console.error(err);
@@ -557,50 +557,20 @@ function AppContent() {
         headers: { 'Content-Type': 'application/json' }
       });
       if (res.ok) {
-    toast.success('Fechas guardadas correctamente');
-    fetchStudents();
-  }
-} catch (err) {
-  console.error(err);
-  toast.error('Error al guardar fechas');
-}
-};
-
-const handleRemoveAccents = async () => {
-if (isUploading) return;
-if (!window.confirm('Â¿EstÃ¡s seguro de que querÃ©s limpiar todos los acentos del padrÃ³n? Esto modificarÃ¡ permanentemente los nombres y apellidos en la base de datos.')) {
-  return;
-}
-
-try {
-  setIsUploading(true);
-  const res = await fetch(`${API_URL}/api/students/remove-accents?user=${encodeURIComponent(user?.email || 'Sistema')}`, {
-    method: 'POST'
-  });
-  const data = await res.json();
-  if (res.ok) {
-    toast.success(data.message || 'Acentos limpiados correctamente');
-    await fetchStudents();
-  } else {
-    throw new Error(data.error || 'Error al limpiar acentos');
-  }
-} catch (err: any) {
-  toast.error(err.message);
-} finally {
-  setIsUploading(false);
-}
-};
+        toast.success('Fechas guardadas correctamente');
+        fetchStudents();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar fechas');
+    }
+  };
 
   const startEditDatos = () => {
     if (!selectedStudent) return;
-    // The original code split nombre into nombre and apellido.
-    // The new diff implies selectedStudent might have separate nombre and apellido fields,
-    // or that the backend expects them separately.
-    // Assuming selectedStudent.nombre is the full name and selectedStudent.apellido is available.
-    // If not, the logic for splitting `nombre` would need to be re-introduced or adapted.
     setEditDni(selectedStudent.dni || '');
-    setEditNombre(selectedStudent.nombre); // Assuming selectedStudent.nombre is the first name or full name
-    setEditApellido(selectedStudent.apellido || ''); // Assuming selectedStudent.apellido is available
+    setEditNombre(selectedStudent.nombre);
+    setEditApellido(selectedStudent.apellido || '');
     setEditNacionalidad(selectedStudent.nacionalidad || '');
     setEditEmail(selectedStudent.email || '');
     setEditingDatos(true);
@@ -626,7 +596,7 @@ try {
         ...prev,
         dni: editDni,
         nombre: `${editNombre} ${editApellido}`.trim(),
-        apellido: editApellido, // Assuming apellido is now a separate field
+        apellido: editApellido,
         nacionalidad: editNacionalidad,
         email: editEmail
       }) : null);
@@ -635,6 +605,7 @@ try {
       toast.error('Error al guardar datos personales');
     }
   };
+
 
   const saveNotaManual = async () => {
     if (!selectedStudent?.id || !newMateria.trim() || !newNota) return;
@@ -818,29 +789,8 @@ try {
             <p className="text-4xl font-extrabold text-amber-800">{sinAnalitico}</p>
           </div>
         </div>
-
-        {/* Acciones RÃ¡pidas Dashboard */}
         <div className="pt-6 border-t border-slate-200">
-          <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">âš™ Acciones de Mantenimiento</h3>
-          <div className="flex flex-wrap gap-4">
-            <button
-              onClick={handleRemoveAccents}
-              disabled={isUploading}
-              className={`flex items-center gap-3 px-6 py-4 bg-white border-2 border-slate-200 rounded-2xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-700 transition-all shadow-sm ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                <span className="text-xl">âœ¨</span>
-              </div>
-              <div className="text-left">
-                <p className="text-sm">Limpiar Acentos del PadrÃ³n</p>
-                <p className="text-[10px] font-normal text-slate-400">Normaliza Nombres y Apellidos en la BD</p>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <div className="pt-6 border-t border-slate-200">
-          <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">DistribuciÃ³n por Licencia / Carrera</h3>
+          <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">Distribucion por Licencia / Carrera</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {Object.entries(porCarrera).map(([carr, count]) => (
               <div key={carr} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:bg-slate-50 transition-colors">
@@ -849,7 +799,7 @@ try {
               </div>
             ))}
             {Object.keys(porCarrera).length === 0 && (
-              <p className="text-slate-500 italic">Cargue el padrÃ³n QUINTTOS para ver estadÃ­sticas.</p>
+              <p className="text-slate-500 italic">Cargue el padron QUINTTOS para ver estadisticas.</p>
             )}
           </div>
         </div>
@@ -861,8 +811,8 @@ try {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">PadrÃ³n de Alumnos y AnalÃ­ticos</h2>
-          <p className="text-slate-500 text-sm">Sincronice el padrÃ³n e importe notas para generar certificados.</p>
+          <h2 className="text-xl font-bold text-slate-900">Padron de Alumnos y Analiticos</h2>
+          <p className="text-slate-500 text-sm">Sincronice el padron e importe notas para generar certificados.</p>
         </div>
 
         {user.role === 'admin' && (
@@ -1744,7 +1694,7 @@ try {
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${activeTab === 'alumnos' ? 'bg-blue-800 text-white font-bold shadow-inner border border-blue-700/50' : 'text-blue-200/80 hover:bg-blue-900 hover:text-white font-medium'}`}
           >
             <Users className={`w-5 h-5 ${activeTab === 'alumnos' ? 'text-blue-300' : ''}`} />
-            PadrÃ³n de Alumnos
+            Padron de Alumnos
           </button>
           {user.role === 'admin' && (
             <button
@@ -1866,6 +1816,8 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+
 
 
 
