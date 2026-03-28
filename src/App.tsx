@@ -20,6 +20,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { type StudentData as BaseStudentData, getSubjectsByLicencia } from './services/pdfService';
 import logo from './assets/logo.png';
+import logoHorizontal from './assets/logo_horizontal.png';
 
 type UserRole = 'admin' | 'editor' | 'viewer' | 'student';
 
@@ -718,7 +719,11 @@ function AppContent() {
   const uniqueComisiones = Array.from(new Set(students.map(s => s.comision).filter(Boolean)));
 
   const filteredStudents = students.filter(s => {
-    const matchesSearch = s.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || s.dni.includes(searchTerm);
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      s.nombre.toLowerCase().includes(term) ||
+      (s.apellido || '').toLowerCase().includes(term) ||
+      s.dni.includes(searchTerm);
     const matchesStatus = statusFilter === 'all' || s.situacion === statusFilter;
     const matchesLicencia = licenciaFilter === 'all' || (s.licencia || '').toUpperCase() === licenciaFilter.toUpperCase();
     const matchesComision = comisionFilter === 'all' || (s.comision || '').toUpperCase() === comisionFilter.toUpperCase();
@@ -1641,11 +1646,11 @@ function AppContent() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 w-full justify-end flex-wrap mt-2">
+                  <div className="flex items-center gap-2 w-full justify-end flex-wrap mt-2">
                     {user.role === 'admin' && selectedStudent.estado_analitico === 'emitido' && (
                       <button
                         onClick={() => handleToggleEstado(selectedStudent.id as any)}
-                        className="px-4 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all shadow-sm border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
+                        className="px-3.5 py-2 rounded-lg text-sm font-bold flex gap-2 items-center transition-all shadow-sm border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300"
                         title="Revertir a Borrador (requiere justificación)"
                       >
                         Desmarcar Emitido
@@ -1655,7 +1660,7 @@ function AppContent() {
                     {user.role === 'admin' && selectedStudent.notas && selectedStudent.notas.length > 0 && (
                       <button
                         onClick={() => handleDeleteNotas(selectedStudent.id as any)}
-                        className="p-2.5 text-red-500 hover:bg-red-100 rounded-xl transition-colors border border-transparent hover:border-red-200"
+                        className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors border border-transparent hover:border-red-200"
                         title="Eliminar solo las notas (Quedar en Borrador)"
                       >
                         <Trash2 className="w-5 h-5" />
@@ -1670,7 +1675,7 @@ function AppContent() {
                           <button
                             onClick={() => !disabled && downloadPDF(selectedStudent)}
                             disabled={disabled}
-                            className={`px-5 py-2.5 rounded-xl font-bold flex gap-2 items-center transition-all border border-[#0ffff4]/40 bg-[#0ffff4]/10 hover:bg-[#0ffff4]/20 text-[#002d2b]${disabledClasses}`}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold flex gap-2 items-center transition-all border border-[#0ffff4]/40 bg-[#0ffff4]/10 hover:bg-[#0ffff4]/20 text-[#002d2b]${disabledClasses}`}
                             title="Abre el PDF para verlo, sin marcarlo como Emitido"
                           >
                             <Download className="w-4 h-4" /> Vista Previa
@@ -1678,7 +1683,7 @@ function AppContent() {
                           <button
                             onClick={() => !disabled && setDiplomaModal({ isOpen: true, student: selectedStudent })}
                             disabled={disabled}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold transition-all${disabledClasses}`}
+                            className={`flex items-center justify-center gap-2 px-4 py-2 border-2 border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-lg text-sm font-bold transition-all${disabledClasses}`}
                           >
                             <School className="w-5 h-5" />
                             Generar Diploma
@@ -1686,7 +1691,7 @@ function AppContent() {
                           <button
                             onClick={() => !disabled && downloadPDFAndEmit(selectedStudent)}
                             disabled={disabled}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 bg-[#002d2b] hover:bg-[#00968f] text-white rounded-xl font-bold transition-all shadow-lg shadow-[#002d2b]/25${disabledClasses}`}
+                            className={`flex items-center justify-center gap-2 px-4 py-2 bg-[#002d2b] hover:bg-[#00968f] text-white rounded-lg text-sm font-bold transition-all shadow-md shadow-[#002d2b]/20${disabledClasses}`}
                             title="Genera el PDF y marca el analítico como Emitido"
                           >
                             <Download className="w-5 h-5" />
@@ -1816,7 +1821,7 @@ function AppContent() {
       {/* SIDEBAR */}
       <aside className="w-72 bg-[#002d2b] flex flex-col shadow-2xl relative z-20 shrink-0 text-white">
         <div className="p-6 flex items-center border-b border-white/10">
-          <img src={logo} alt="Escuela Maradona Menotti" className="h-10 w-auto object-contain" />
+          <img src={logoHorizontal} alt="Escuela Maradona Menotti" className="h-10 w-auto object-contain" />
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-3">
