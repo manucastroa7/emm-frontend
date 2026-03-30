@@ -753,6 +753,13 @@ function AppContent() {
     return lic;
   };
 
+  const formatUserDisplay = (email?: string, nombre?: string) => {
+    if (nombre && nombre.trim()) return nombre;
+    if (!email) return 'Sin usuario';
+    if (email.includes('@')) return email.split('@')[0];
+    return email;
+  };
+
   const filteredStudents = students.filter(s => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -1662,7 +1669,10 @@ function AppContent() {
                       {selectedStudent.historial.slice().reverse().map((log: any, i: number) => (
                         <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 text-sm">
                           <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-slate-700">{log.usuario}</span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-700">{formatUserDisplay(log.usuario, log.nombre)}</span>
+                              {log.usuario && <span className="text-[11px] text-slate-400">{log.usuario}</span>}
+                            </div>
                             <span className="text-xs text-slate-400 font-medium">{new Date(log.fecha).toLocaleString()}</span>
                           </div>
                           <p className="text-slate-600">{log.accion}</p>
