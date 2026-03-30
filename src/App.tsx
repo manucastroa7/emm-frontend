@@ -1582,7 +1582,7 @@ function AppContent() {
                                     max="10"
                                     value={pending !== undefined ? pending : (notaActual || '')}
                                     onChange={e => setPendingNotas(prev => ({ ...prev, [materia]: e.target.value }))}
-                                    onKeyDown={e => { if (e.key === 'Enter') guardarNota(materia, pending ⚠️ String(notaActual)); }}
+                                    onKeyDown={e => { if (e.key === 'Enter') guardarNota(materia, pending ?? String(notaActual)); }}
                                     className={`w-16 text-center px-2 py-1 rounded-lg text-sm font-black border outline-none focus:ring-2 focus:ring-[#00968f] transition-colors ${hasPending ? 'bg-yellow-100 border-yellow-400 text-yellow-900' : tiene ? 'bg-[#0ffff4]/15 text-[#002d2b] border-[#0ffff4]/40' : 'bg-red-50 text-red-500 border-red-200'}`}
                                     placeholder="0"
                                   />
