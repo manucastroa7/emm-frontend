@@ -1475,7 +1475,7 @@ function AppContent() {
                     required 
                     type="date" 
                     name="fecha_emision" 
-                    defaultValue={diplomaModal.student?.fecha_emision || new Date().toISOString().split('T')[0]} 
+                    defaultValue={new Date().toISOString().split('T')[0]} 
                     className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 ring-indigo-100 outline-none font-medium" 
                   />
                 </div>
