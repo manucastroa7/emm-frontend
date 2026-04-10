@@ -8,27 +8,16 @@ import {
   User,
   LogOut,
   FileText,
-  History,
   Info,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  FileCheck2,
   Trash2,
-  AlertCircle,
   Users,
   Search,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
-  Plus,
-  ArrowRight,
   UserPlus,
   RefreshCw,
-  MoreVertical,
   X,
-  Paperclip,
-  RotateCcw,
   School,
   LayoutDashboard,
   FileDown,
@@ -136,7 +125,7 @@ function AppContent() {
 
   // Horas de Campo
   const [entregas, setEntregas] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<string[]>([]);
+
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [fieldHourSubTab, setFieldHourSubTab] = useState<'summary' | 'general' | 'descarga' | 'tp' | 'entrega' | 'dashboard'>('summary');
   const [fieldHourStats, setFieldHourStats] = useState<{
@@ -1162,16 +1151,8 @@ function AppContent() {
           </div>
         </div>
 
-        {user?.email === 'titulos@maradonamenotti.com.ar' && (
-          <div className="space-y-12">
-            <div className="pt-10 border-t border-slate-200">
-              {renderAlumnos()}
-            </div>
-            <div className="pt-10 border-t border-slate-200">
-              {renderUsuarios()}
-            </div>
-          </div>
-        )}
+        {/* Vista colapsada manual eliminada para favorecer navegación por sidebar */}
+
 
         <div className="pt-6 border-t border-slate-200">
           <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">Distribucion por Licencia / Carrera</h3>
@@ -2786,13 +2767,13 @@ function AppContent() {
           {/* SECCIÓN ANALÍTICOS */}
           {user.role !== 'student' && user.email !== 'horasdecampo@maradonamenotti.com.ar' && (user.role === 'admin' || (user.permissions?.['analiticos'] && user.permissions['analiticos'] !== 'none')) && (
             <div className="space-y-2">
-              <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Módulo Analíticos</p>
+              <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Padrón de Alumnos</p>
               <button
                 onClick={() => setActiveTab('alumnos')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'alumnos' ? 'bg-[#0ffff4]/10 text-[#0ffff4] font-bold shadow-sm border border-[#0ffff4]/30' : 'text-white/60 hover:bg-white/5 hover:text-white font-medium'}`}
               >
                 <Users className="w-5 h-5" />
-                Padrón de Alumnos
+                Listado de Alumnos
               </button>
             </div>
           )}
@@ -2867,19 +2848,20 @@ function AppContent() {
             </div>
           )}
 
-          {/* SECCIÓN CONFIGURACIÓN */}
+          {/* SECCIÓN Gestión Usuarios - Al final */}
           {user.role === 'admin' && user.email !== 'horasdecampo@maradonamenotti.com.ar' && (
             <div className="space-y-2">
-              <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Configuración</p>
+              <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Acceso y Seguridad</p>
               <button
                 onClick={() => { setActiveTab('usuarios'); fetchAppUsers(); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'usuarios' ? 'bg-[#0ffff4]/10 text-[#0ffff4] font-bold shadow-sm border border-[#0ffff4]/30' : 'text-white/60 hover:bg-white/5 hover:text-white font-medium'}`}
               >
-                <User className="w-5 h-5" />
+                <UserPlus className="w-5 h-5" />
                 Gestión de Usuarios
               </button>
             </div>
           )}
+
         </nav>
 
         <div className="p-5 bg-white/5 mt-auto border-t border-white/10">
