@@ -91,10 +91,43 @@ export const LICENCIA_SUBJECTS: Record<string, string[]> = {
     "PROMEDIO GENERAL DE PRÁCTICAS"
   ],
   "TD1": [
-    "MÓDULO TD1"
+    "METODOLOGÍA DE LA ENSEÑANZA II",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA II",
+    "REGLAMENTO II",
+    "PREPARACIÓN FÍSICA I",
+    "MEDICINA II",
+    "PLANIFICACIÓN DEL ENTRENAMIENTO I",
+    "PSICOLOGÍA I",
+    "ÉTICA Y VALORES",
+    "HISTORIA DEL FÚTBOL ARGENTINO",
+    "PROMEDIO GENERAL DE PRÁCTICAS",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA III",
+    "PLANIFICACIÓN DEL ENTRENAMIENTO II",
+    "DESARROLLO DE TALENTOS",
+    "DIRECCIÓN DE JUGADORES Y EQUIPOS I",
+    "DERECHO DEPORTIVO I",
+    "ORGANIZACIÓN DEPORTIVA",
+    "ADMINISTRACIÓN DEPORTIVA",
+    "PREPARACIÓN FÍSICA II",
+    "PSICOLOGÍA III",
+    "MEDICINA III",
+    "REGLAMENTO III",
+    "PROMEDIO GENERAL DE PRÁCTICAS"
   ],
   "TD2": [
-    "MÓDULO TD2"
+    "FÚTBOL INTERNACIONAL",
+    "TÉCNICA, TÁCTICA Y ESTRATEGIA IV",
+    "PREPARACIÓN FÍSICA III",
+    "PLANIFICACIÓN DEL ENTRENAMIENTO III",
+    "DERECHO DEPORTIVO II",
+    "ADMINISTRACIÓN Y PLANEAMIENTO ESTRATÉGICO",
+    "DIRECCIÓN DE JUGADORES Y EQUIPOS II",
+    "REGLAMENTO PRO",
+    "MEDICINA IV",
+    "TECNOLOGÍA APLICADA",
+    "PSICOLOGÍA IV",
+    "RECURSOS HUMANOS",
+    "PROMEDIO GENERAL DE PRÁCTICAS"
   ],
   "ACTUALIZACION": [
     // No lleva materias; se usa solo para el diploma del curso de actualización
@@ -102,7 +135,22 @@ export const LICENCIA_SUBJECTS: Record<string, string[]> = {
 };
 
 export const getSubjectsByLicencia = (licencia: string): string[] => {
-  const lic = licencia?.toUpperCase().trim() || '';
+  const lic = (licencia || '').toUpperCase().trim();
+  if (!lic) return [];
+
+  if (lic === 'PRO' || lic.includes('PROFESIONAL') || lic.includes('PRO ') || lic.includes('TRAYECTORIA II') || lic.includes('EXTENSA') || lic.includes('TRAYECTORIA DESTACADA II') || lic.includes('TRAYECTORIA DESTACADA 2')) return LICENCIA_SUBJECTS['PRO'];
+  if (lic === 'CB' || lic.includes('COMBO') || (lic.includes('C') && lic.includes('B'))) return LICENCIA_SUBJECTS['CB'];
+  if (lic.includes('TD1') || lic.includes('DESTACADA I') || lic.includes('TRAYECTORIA I') || lic.includes('EXTENSA') || lic.includes('TRAYECTORIA DESTACADA I')) {
+    return LICENCIA_SUBJECTS['TD1'];
+  }
+  if (lic.includes('TD2') || lic.includes('DESTACADA II') || lic.includes('TRAYECTORIA II') || lic.includes('EXTENSA') || lic.includes('TRAYECTORIA DESTACADA II')) {
+    return LICENCIA_SUBJECTS['PRO'];
+  }
+  if (lic.includes('ACTUALIZACION')) return LICENCIA_SUBJECTS['ACTUALIZACION'];
+  if (lic === 'A' || lic.endsWith(' A') || lic.includes(' A ')) return LICENCIA_SUBJECTS['A'];
+  if (lic === 'B' || lic.endsWith(' B') || lic.includes(' B ')) return LICENCIA_SUBJECTS['B'];
+  if (lic === 'C' || lic.endsWith(' C') || lic.includes(' C ')) return LICENCIA_SUBJECTS['C'];
+
   return LICENCIA_SUBJECTS[lic] || [];
 };
 
@@ -130,15 +178,23 @@ export const generateAnaliticoPDF = (student: StudentData) => {
   doc.line(pageWidth / 2 - 25, 46, pageWidth / 2 + 25, 46);
 
   // Main Text
+  const licenseType = student.licencia.toUpperCase().trim();
+  let displayLicense = student.licencia.toUpperCase();
+  if (licenseType === 'TD2' || licenseType.includes('TRAYECTORIA DESTACADA II') || licenseType.includes('TRAYECTORIA DESTACADA 2') || licenseType.includes('EXTENSA') || licenseType.includes('TRAYECTORIA II')) {
+    displayLicense = 'PRO';
+  }
+  if (licenseType === 'TD1' || licenseType.includes('TRAYECTORIA DESTACADA I') || licenseType.includes('TRAYECTORIA DESTACADA 1') || licenseType.includes('TRAYECTORIA I')) {
+    displayLicense = 'B Y A';
+  }
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  const mainText = `La Escuela de Entrenadores César Luis Menotti, certifica según datos y documentación que ${student.nombre}, DNI ${student.dni} ha cursado y aprobado las siguientes materias correspondientes a la carrera de Entrenador Nacional de Fútbol, haciéndose acreedor al título de ENTRENADOR DE FUTBOL LICENCIA ${student.licencia}.`;
+  const mainText = `La Escuela de Entrenadores César Luis Menotti, certifica según datos y documentación que ${student.nombre}, DNI ${student.dni} ha cursado y aprobado las siguientes materias correspondientes a la carrera de Entrenador Nacional de Fútbol, haciéndose acreedor al título de ENTRENADOR DE FUTBOL LICENCIA ${displayLicense}.`;
   const splitText = doc.splitTextToSize(mainText, pageWidth - 40);
   doc.text(splitText, 20, 55);
 
   // Table Data Preparation with Grouping
   const body: any[] = [];
-  const licenseType = student.licencia.toUpperCase();
 
   const addGroup = (level: string) => {
     const subjects = LICENCIA_SUBJECTS[level] || [];
@@ -155,15 +211,15 @@ export const generateAnaliticoPDF = (student: StudentData) => {
     }
   };
 
-  if (licenseType === "CB") {
+  if (licenseType === "CB" || licenseType.includes('COMBO') || (licenseType.includes('C') && licenseType.includes('B'))) {
     addGroup("C");
     addGroup("B");
-  } else if (licenseType === "BA" || licenseType === "B Y A") {
+  } else if (licenseType === "BA" || licenseType === "B Y A" || licenseType.includes('TD1') || licenseType.includes("TRAYECTORIA I") || licenseType.includes("TRAYECTORIA DESTACADA I")) {
     addGroup("B");
     addGroup("A");
   } else if (licenseType === "A") {
     addGroup("A");
-  } else if (licenseType === "PRO") {
+  } else if (licenseType === "PRO" || licenseType.includes('TD2') || licenseType.includes('EXTENSA') || licenseType.includes("TRAYECTORIA II") || licenseType.includes("TRAYECTORIA DESTACADA II")) {
     addGroup("PRO");
   } else {
     // Fallback for other types
