@@ -220,7 +220,7 @@ function AppContent() {
   useEffect(() => {
     if (activeTab === 'horas-campo') {
       fetchEntregas();
-      fetchTemplates();
+
       const isFieldHourAdmin = user?.role === 'admin' || user?.permissions?.['horas-campo'] === 'admin';
       if (isFieldHourAdmin) {
         fetchFieldHourStats();
@@ -355,15 +355,7 @@ function AppContent() {
     }
   };
 
-  const fetchTemplates = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/horas-campo/templates`);
-      const data = await res.json();
-      setTemplates(data.data || []);
-    } catch (err) {
-      console.warn('Error fetching templates');
-    }
-  };
+
 
   const handleUploadFieldHour = async (file: File, docType: string) => {
     if (!user) return;
