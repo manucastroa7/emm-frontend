@@ -676,8 +676,13 @@ function AppContent() {
     if (!isAct && !isAnaliticoCompleto(diplomaModal.student)) { toast.error('Analítico incompleto: faltan notas obligatorias.'); return; }
 
     const formData = new FormData(e.currentTarget);
+    const nacionalidad = String(formData.get('nacionalidad') || '').trim();
+    if (!nacionalidad) {
+      toast.error('No se puede emitir el diploma sin nacionalidad cargada.');
+      return;
+    }
     const data = {
-      nacionalidad: formData.get('nacionalidad'),
+      nacionalidad,
       fecha_emision: formData.get('fecha_emision'),
       nombre: diplomaModal.student.nombre,
       apellido: diplomaModal.student.apellido
@@ -691,7 +696,10 @@ function AppContent() {
         body: JSON.stringify(data)
       });
 
-      if (!res.ok) throw new Error('Error al generar diploma');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || errData?.error || 'Error al generar diploma');
+      }
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -902,30 +910,26 @@ function AppContent() {
   const saveDatos = async () => {
     if (!selectedStudent?.id) return;
     try {
-      await fetch(`${API_URL}/api/students/${selectedStudent.id}/datos?${getUserQuery()}`, {
+      const payload = {
+        documento: editDni.trim(),
+        nombre: editNombre.trim(),
+        apellido: editApellido.trim(),
+        nacionalidad: editNacionalidad.trim(),
+        email: editEmail.trim()
+      };
+      const res = await fetch(`${API_URL}/api/students/${selectedStudent.id}/datos?${getUserQuery()}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documento: editDni,
-          nombre: editNombre,
-          apellido: editApellido,
-          nacionalidad: editNacionalidad,
-          email: editEmail
-        })
+        body: JSON.stringify(payload)
       });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Error al guardar datos personales');
       await fetchStudents();
+      await loadStudentDetail(selectedStudent.id);
       setEditingDatos(false);
-      setSelectedStudent(prev => prev ? ({
-        ...prev,
-        dni: editDni,
-        nombre: `${editNombre} ${editApellido}`.trim(),
-        apellido: editApellido,
-        nacionalidad: editNacionalidad,
-        email: editEmail
-      }) : null);
       toast.success('Datos personales guardados correctamente.');
-    } catch (err) {
-      toast.error('Error al guardar datos personales');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar datos personales');
     }
   };
 
@@ -1633,7 +1637,7 @@ function AppContent() {
                   <input 
                     required 
                     name="nacionalidad" 
-                    defaultValue={diplomaModal.student?.nacionalidad || 'ARGENTINA'} 
+                    defaultValue={diplomaModal.student?.nacionalidad || ''} 
                     className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 ring-indigo-100 outline-none font-medium" 
                     placeholder="Ej: ARGENTINA"
                   />
@@ -2183,6 +2187,11 @@ function AppContent() {
                               </ul>
                             </div>
                           );
+                          return;
+                        }
+
+                        if (type === 'diploma' && !String(selectedStudent.nacionalidad || '').trim()) {
+                          toast.error('No se puede emitir el diploma sin nacionalidad cargada.');
                           return;
                         }
 
