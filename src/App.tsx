@@ -6,6 +6,7 @@ import {
   Download,
   Upload,
   User,
+  Mail,
   LogOut,
   FileText,
   CheckCircle2,
@@ -14,6 +15,7 @@ import {
   Users,
   Search,
   UserPlus,
+  Copy,
   X,
   School,
   LayoutDashboard,
@@ -167,6 +169,95 @@ function AppContent() {
 
   const isAnaliticoCompleto = (student: StudentData | null) => {
     return getAnaliticoErrors(student).length === 0;
+  };
+
+  const getNotasPendientesParaExport = (student: StudentData | null) => {
+    if (!student) {
+      return {
+        faltantes: ['No hay datos del alumno'],
+        desaprobadas: [] as string[],
+        detalleMail: 'No hay datos del alumno.'
+      };
+    }
+
+    if ((student.licencia || '').toUpperCase() === 'ACTUALIZACION') {
+      return {
+        faltantes: [] as string[],
+        desaprobadas: [] as string[],
+        detalleMail: ''
+      };
+    }
+
+    const required = getSubjectsByLicencia(student.licencia || '');
+    if (required.length === 0) {
+      return {
+        faltantes: ['Plan de estudios no reconocido'],
+        desaprobadas: [] as string[],
+        detalleMail: 'No se reconoce el plan de estudios para esta licencia.'
+      };
+    }
+
+    const normalize = (s: string) => s.toUpperCase().replace(/,/g, '').replace(/\s+/g, ' ').trim();
+    const faltantes: string[] = [];
+    const desaprobadas: string[] = [];
+
+    required.forEach(sub => {
+      const normSub = normalize(sub);
+      const grade = student.notas?.find(n => normalize(n.materia) === normSub);
+      if (!grade || grade.nota === 0) {
+        faltantes.push(sub);
+      } else if (grade.nota < 6) {
+        desaprobadas.push(`${sub} (${grade.nota})`);
+      }
+    });
+
+    const partes: string[] = [];
+    if (faltantes.length > 0) partes.push(`Te faltan cargar: ${faltantes.join(', ')}.`);
+    if (desaprobadas.length > 0) partes.push(`Tenés desaprobadas: ${desaprobadas.join(', ')}.`);
+
+    return {
+      faltantes,
+      desaprobadas,
+      detalleMail: partes.join(' ')
+    };
+  };
+
+  const getMailContent = (student: StudentData | null) => {
+    const pendientes = getNotasPendientesParaExport(student);
+    const nombre = [student?.nombre, student?.apellido].filter(Boolean).join(' ').trim() || 'Alumno/a';
+    const asunto = 'Regularizacion de notas pendientes';
+
+    if (!pendientes.detalleMail) {
+      return {
+        asunto,
+        cuerpo: `Hola ${nombre},\n\nTu analitico no registra pendientes de notas en este momento.\n\nSaludos.`
+      };
+    }
+
+    return {
+      asunto,
+      cuerpo: `Hola ${nombre},\n\nDetectamos pendientes en tu analitico.\n\n${pendientes.detalleMail}\n\nPor favor, regularizalo a la brevedad.\n\nSaludos.`
+    };
+  };
+
+  const copyMailContent = async (student: StudentData | null) => {
+    try {
+      const { asunto, cuerpo } = getMailContent(student);
+      await navigator.clipboard.writeText(`Asunto: ${asunto}\n\n${cuerpo}`);
+      toast.success('Texto de mail copiado');
+    } catch {
+      toast.error('No se pudo copiar el texto del mail');
+    }
+  };
+
+  const openMailClient = (student: StudentData | null) => {
+    if (!student?.email) {
+      toast.error('El alumno no tiene email cargado');
+      return;
+    }
+
+    const { asunto, cuerpo } = getMailContent(student);
+    window.location.href = `mailto:${student.email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   };
 
   const getLegajoPendings = (student: StudentData | null) => {
@@ -935,10 +1026,15 @@ function AppContent() {
   };
 
   const exportToExcel = () => {
-    const dataToExport = filteredStudents.map(student => ({
+    const dataToExport = filteredStudents.map(student => {
+      const pendientes = getNotasPendientesParaExport(student);
+      return {
       EstadoNotas: (!student.notas || student.notas.length === 0)
         ? 'Esperando Notas'
         : (isAnaliticoCompleto(student) ? 'Completo' : 'Faltan Notas'),
+      'Materias Faltantes': pendientes.faltantes.join(' | '),
+      'Materias Desaprobadas': pendientes.desaprobadas.join(' | '),
+      'Detalle Para Mail': pendientes.detalleMail,
       ID: student.dni,
       Nombre: student.nombre,
       Apellido: student.apellido || '',
@@ -951,7 +1047,8 @@ function AppContent() {
       'Materias Aprobadas': student.notas?.length || 0,
       'Fecha Emision': student.fecha_emision || '',
       'Fecha Fin Cursada': student.fecha_fin_cursada || '',
-    }));
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -1792,6 +1889,47 @@ function AppContent() {
                     </button>
                   )}
                 </div>
+
+                {(() => {
+                  const mailContent = getMailContent(selectedStudent);
+                  return (
+                    <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Comunicacion</p>
+                          <h3 className="text-base font-bold text-slate-900 mt-1">Mail para seguimiento</h3>
+                          <p className="text-sm text-slate-500 mt-1">
+                            {selectedStudent.email ? `Destino: ${selectedStudent.email}` : 'El alumno no tiene email cargado. Podés copiar el texto y usarlo manualmente.'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            onClick={() => copyMailContent(selectedStudent)}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 text-sm font-bold transition-colors"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Copiar
+                          </button>
+                          <button
+                            onClick={() => openMailClient(selectedStudent)}
+                            disabled={!selectedStudent.email}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#0ffff4]/40 bg-[#0ffff4]/15 text-[#002d2b] hover:bg-[#0ffff4]/25 text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Mail className="w-4 h-4" />
+                            Abrir mail
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-bold text-slate-500 mb-2">Asunto</p>
+                        <p className="text-sm font-semibold text-slate-800">{mailContent.asunto}</p>
+                        <p className="text-xs font-bold text-slate-500 mt-3 mb-2">Mensaje</p>
+                        <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">{mailContent.cuerpo}</pre>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {showAddNota && (
                   <div className="mb-4 p-4 bg-[#0ffff4]/12 border border-[#0ffff4]/35 rounded-xl space-y-3">
