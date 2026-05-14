@@ -19,12 +19,14 @@ import {
   X,
   School,
   LayoutDashboard,
-  Edit
+  Edit,
+  UserCog
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { type StudentData as BaseStudentData, getSubjectsByLicencia } from './services/pdfService';
 import logo from './assets/logo.png';
 import logoHorizontal from './assets/logo_horizontal.png';
+import CrmModule from './CrmModule';
 
 type UserRole = 'superadmin' | 'editor' | 'viewer' | 'student';
 
@@ -81,7 +83,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 function AppContent() {
   const API_URL = import.meta.env.VITE_API_URL || 'https://analiticos-backend-production.up.railway.app';
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'alumnos' | 'usuarios'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'alumnos' | 'usuarios' | 'crm'>('dashboard');
   const [user, setUser] = useState<UserProfile | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -129,6 +131,7 @@ function AppContent() {
   const hasAnaliticosAccess = !!(user && (isSuperadmin || ((user.permissions?.['analiticos'] || 'none') !== 'none')));
   const canEditAnaliticos = !!(user && (isSuperadmin || user.permissions?.['analiticos'] === 'editor'));
   const canManageUsers = !!isSuperadmin;
+  const hasCrmAccess = !!(user && (isSuperadmin || ((user.permissions?.['crm'] || 'none') !== 'none')));
   const canAssignSuperadmin = !!(editingUser?.role === 'superadmin' || newUserEmail.trim().toLowerCase() === 'admin@maradonamenotti.com.ar');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
 
@@ -1692,7 +1695,7 @@ function AppContent() {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
             >
               {/* Modal Header */}
               <div className="p-6 md:px-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
@@ -2503,6 +2506,21 @@ function AppContent() {
           )}
 
 
+                    {/* SECCIÓN CRM */}
+          {user.role !== 'student' && hasCrmAccess && (
+            <div className="space-y-2">
+              <p className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">CRM</p>
+              <button
+                onClick={() => setActiveTab('crm')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'crm' ? 'bg-[#0ffff4]/10 text-[#0ffff4] font-bold shadow-sm border border-[#0ffff4]/30' : 'text-white/60 hover:bg-white/5 hover:text-white font-medium'}`}
+              >
+                <UserCog className="w-5 h-5" />
+                Prospectos CRM
+              </button>
+            </div>
+          )}
+
+
           {/* SECCIÓN Gestión Usuarios - Al final */}
           {canManageUsers && (
             <div className="space-y-2">
@@ -2547,6 +2565,7 @@ function AppContent() {
           <h1 className="text-[#002d2b] text-2xl font-black tracking-tight">
             {activeTab === 'dashboard' ? 'Módulo Analíticos: Panel de Control' : 
              activeTab === 'usuarios' ? 'Gestión de Usuarios' : 
+             activeTab === 'crm' ? 'CRM — Gestión de Prospectos' : 
              'Padrón de Alumnos'}
           </h1>
         </header>
@@ -2555,6 +2574,7 @@ function AppContent() {
           <div className="max-w-7xl mx-auto pb-12">
             {activeTab === 'dashboard' ? renderDashboard() : 
              activeTab === 'usuarios' ? renderUsuarios() : 
+             activeTab === 'crm' ? <CrmModule apiUrl={API_URL} isSuperadmin={isSuperadmin} userPermissions={user?.permissions} /> :
              renderAlumnos()}
           </div>
         </main>

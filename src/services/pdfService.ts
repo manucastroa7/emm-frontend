@@ -10,6 +10,7 @@ export interface StudentData {
   promedio: number;
   fecha: string;
   horasPracticas?: string;
+  comision?: string;
 }
 
 const numberToWords = (n: number): string => {
@@ -18,6 +19,53 @@ const numberToWords = (n: number): string => {
     5: "CINCO", 6: "SEIS", 7: "SIETE", 8: "OCHO", 9: "NUEVE", 10: "DIEZ"
   };
   return words[n] || n.toString();
+};
+
+const normalizeAcademicText = (value?: string | null): string =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace("LICENCIA ", "")
+    .trim();
+
+const isTrayectoria1Lic = (value?: string | null): boolean => {
+  const lic = normalizeAcademicText(value);
+  return lic === "BA"
+    || lic === "B Y A"
+    || lic === "TD1"
+    || lic.includes("TRAYECTORIA DESTACADA I")
+    || lic.includes("TRAYECTORIA DESTACADA 1")
+    || lic.includes("TRAYECTORIA I")
+    || lic.includes("TRAYECTORIA 1");
+};
+
+const isTrayectoria2Lic = (value?: string | null): boolean => {
+  const lic = normalizeAcademicText(value);
+  return lic === "TD2"
+    || lic.includes("TRAYECTORIA DESTACADA II")
+    || lic.includes("TRAYECTORIA DESTACADA 2")
+    || lic.includes("TRAYECTORIA II")
+    || lic.includes("TRAYECTORIA 2");
+};
+
+const isComision03 = (value?: string | null): boolean => {
+  const comision = normalizeAcademicText(value);
+  return comision === "3"
+    || comision === "03"
+    || /\bCOMISION\s*0?3\b/.test(comision);
+};
+
+export const getHorasPracticasByLicencia = (licencia?: string | null, comision?: string | null): string => {
+  const lic = normalizeAcademicText(licencia || "CB");
+  const combined = `${lic} ${normalizeAcademicText(comision)}`.trim();
+  const isComision03Trayectoria2 = isTrayectoria2Lic(combined)
+    && (isComision03(comision) || /\bCOMISION\s*0?3\b/.test(combined));
+
+  if (isComision03Trayectoria2 || isTrayectoria1Lic(lic) || isTrayectoria2Lic(lic)) return "94";
+  if (lic === "A") return "128";
+  if (lic === "PRO") return "188";
+  return "108";
 };
 
 export const LICENCIA_SUBJECTS: Record<string, string[]> = {
@@ -163,6 +211,7 @@ export const getSubjectsByLicencia = (licencia: string): string[] => {
 export const generateAnaliticoPDF = (student: StudentData) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const horasPracticas = student.horasPracticas || getHorasPracticasByLicencia(student.licencia, student.comision);
 
   doc.setFillColor(0, 0, 0);
   doc.rect(pageWidth / 2 - 10, 10, 20, 20, "F");
@@ -276,7 +325,7 @@ export const generateAnaliticoPDF = (student: StudentData) => {
 
       doc.rect(20, finalY, pageWidth - 40, 7);
       doc.text("TOTAL HORAS PRÁCTICAS EN CAMPO", 25, finalY + 5);
-      doc.text(student.horasPracticas || "-", pageWidth - 45, finalY + 5, { align: "right" });
+      doc.text(horasPracticas, pageWidth - 45, finalY + 5, { align: "right" });
 
       doc.rect(20, finalY + 7, pageWidth - 40, 7);
       doc.text("PROMEDIO GENERAL PRACTICAS", 25, finalY + 12);
