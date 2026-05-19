@@ -140,6 +140,7 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
   const [showConfig, setShowConfig] = useState(false);
   const [showNewProspecto, setShowNewProspecto] = useState(false);
   const [selectedProspecto, setSelectedProspecto] = useState<Prospecto | null>(null);
+  const [waInitialId, setWaInitialId] = useState<string | undefined>();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
@@ -267,7 +268,7 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
       {/* CONTENIDO */}
       {subView === 'whatsapp' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <WhatsAppInbox apiUrl={apiUrl} estados={config.estados.map(item => item.valor)} canEdit={canEdit} onCrmChanged={() => { fetchProspectos(); fetchStats(); }} />
+          <WhatsAppInbox apiUrl={apiUrl} estados={config.estados.map(item => item.valor)} canEdit={canEdit} onCrmChanged={() => { fetchProspectos(); fetchStats(); }} initialId={waInitialId} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pb-4">
@@ -287,6 +288,7 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
           canEdit={canEdit}
           apiUrl={apiUrl}
           onClose={() => setSelectedProspecto(null)}
+          onOpenInWA={(id) => { setSelectedProspecto(null); setWaInitialId(id); onNavigate?.('whatsapp'); }}
           onEstadoChange={handleUpdateEstado}
           onSave={async (id, data) => {
             const r = await fetch(`${apiUrl}/api/crm/prospectos/${id}`, {
@@ -843,13 +845,14 @@ function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDele
 // ═══════════════════════════════════════════════════════════════════════════════
 // DRAWER DETALLE
 // ═══════════════════════════════════════════════════════════════════════════════
-function DrawerDetalle({ prospecto, plantillas, config, canEdit, onClose, onEstadoChange, onSave, onAddSeguimiento, onDeleteSeguimiento }: {
+function DrawerDetalle({ prospecto, plantillas, config, canEdit, onClose, onEstadoChange, onSave, onAddSeguimiento, onDeleteSeguimiento, onOpenInWA }: {
   prospecto: Prospecto; plantillas: Plantilla[]; config: CrmConfig; canEdit: boolean; apiUrl: string;
   onClose: () => void;
   onEstadoChange: (id: string, estado: string) => void;
   onSave: (id: string, data: Partial<Prospecto>) => void;
   onAddSeguimiento: (id: string, data: any) => void;
   onDeleteSeguimiento: (pid: string, sid: string) => void;
+  onOpenInWA?: (id: string) => void;
 }) {
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState({ ...prospecto });
@@ -982,9 +985,16 @@ function DrawerDetalle({ prospecto, plantillas, config, canEdit, onClose, onEsta
                     <div key={label as string}>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label as string}</p>
                       {type === 'phone' && value ? (
-                        <a href={`https://wa.me/${(value as string).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-600 font-semibold text-sm hover:underline flex items-center gap-1">
-                          <MessageCircle className="w-3.5 h-3.5" />{value as string}
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800 text-sm">{value as string}</span>
+                          <button
+                            onClick={() => onOpenInWA?.(prospecto.id)}
+                            title="Abrir en Bandeja WA"
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold hover:bg-green-100 transition-colors"
+                          >
+                            <MessageCircle className="w-3 h-3" />Bandeja WA
+                          </button>
+                        </div>
                       ) : type === 'email' && value ? (
                         <a href={`mailto:${value}`} className="text-blue-600 font-semibold text-sm hover:underline">{value as string}</a>
                       ) : (

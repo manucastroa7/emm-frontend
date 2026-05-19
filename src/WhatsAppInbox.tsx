@@ -53,6 +53,7 @@ interface Props {
   estados: string[];
   canEdit: boolean;
   onCrmChanged: () => void;
+  initialId?: string;
 }
 
 const formatDate = (value?: string) => {
@@ -108,7 +109,7 @@ const upsertConversation = (items: WhatsAppConversation[], next: WhatsAppConvers
   return mergeConversations(items, [next]);
 };
 
-export default function WhatsAppInbox({ apiUrl, estados, canEdit, onCrmChanged }: Props) {
+export default function WhatsAppInbox({ apiUrl, estados, canEdit, onCrmChanged, initialId }: Props) {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
@@ -282,6 +283,10 @@ export default function WhatsAppInbox({ apiUrl, estados, canEdit, onCrmChanged }
   useEffect(() => {
     loadConversations();
   }, [apiUrl]);
+
+  useEffect(() => {
+    if (initialId) setSelectedId(initialId);
+  }, [initialId]);
 
   useEffect(() => {
     if (loading || loadingMoreConversations || !hasMoreConversations) return;
@@ -519,23 +524,26 @@ export default function WhatsAppInbox({ apiUrl, estados, canEdit, onCrmChanged }
                       <span className="px-2 py-0.5 rounded-full border text-[10px] font-black bg-sky-50 text-sky-700 border-sky-200">
                         {conversation.estado}
                       </span>
-                    </div>
-                  </div>
-                  {!!conversation.etiquetas?.length && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {conversation.etiquetas.slice(0, 3).map(tag => (
-                        <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-emerald-100 text-[10px] font-bold text-emerald-700">
-                          <Tag className="w-3 h-3" />
-                          {tag}
-                        </span>
-                      ))}
-                      {conversation.etiquetas.length > 3 && (
-                        <span className="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-bold text-slate-500">
-                          +{conversation.etiquetas.length - 3}
-                        </span>
+                      {!!conversation.etiquetas?.length && (
+                        <div className="flex flex-wrap justify-end gap-1 max-w-[140px]">
+                          {conversation.etiquetas.slice(0, 3).map(tag => (
+                            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-emerald-100 text-[10px] font-bold text-emerald-700">
+                              <Tag className="w-3 h-3" />
+                              {tag}
+                            </span>
+                          ))}
+                          {conversation.etiquetas.length > 3 && (
+                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-bold text-slate-500">
+                              +{conversation.etiquetas.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {conversation.asignado_a && (
+                        <span className="text-[10px] text-violet-500 font-semibold">↩ {conversation.asignado_a}</span>
                       )}
                     </div>
-                  )}
+                  </div>
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <p className={`text-sm truncate ${unread ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{conversation.ultimo_mensaje?.cuerpo_mensaje || 'Sin mensajes'}</p>
                     <span className="text-[11px] text-slate-400 shrink-0">{formatDate(conversation.ultimo_mensaje?.fecha_envio)}</span>
