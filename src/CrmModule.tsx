@@ -8,6 +8,19 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import WhatsAppInbox from './WhatsAppInbox';
+import { io } from 'socket.io-client';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 interface CrmConfigItem {
@@ -71,6 +84,39 @@ const CATEGORIAS_COLOR: Record<string, string> = {
 const TIPOS_CONTACTO = ['WhatsApp', 'Llamada', 'Email', 'Reunión', 'Otro'];
 
 function bgLighten(hex: string) { return hex + '22'; }
+
+// ─── Helpers de actividad ────────────────────────────────────────────────────
+function getLastContact(p: Prospecto): Date | null {
+  if (!p.historial || p.historial.length === 0) return null;
+  const sorted = [...p.historial].sort((a, b) =>
+    new Date(b.fecha_contacto).getTime() - new Date(a.fecha_contacto).getTime()
+  );
+  return new Date(sorted[0].fecha_contacto);
+}
+
+function getDaysAgo(date: Date | null): number | null {
+  if (!date) return null;
+  const diff = Date.now() - date.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function ActivityBadge({ p }: { p: Prospecto }) {
+  const last = getLastContact(p);
+  const days = getDaysAgo(last);
+  if (days === null) {
+    return <span className="text-[10px] text-slate-400 italic">Sin contacto</span>;
+  }
+  const color = days === 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+    : days <= 3 ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+    : days <= 7 ? 'text-amber-600 bg-amber-50 border-amber-200'
+    : 'text-red-600 bg-red-50 border-red-200';
+  const label = days === 0 ? 'Hoy' : days === 1 ? 'Ayer' : `Hace ${days}d`;
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${color}`}>
+      {label}
+    </span>
+  );
+}
 
 function EstadoBadge({ estado, config }: { estado: string; config: CrmConfig }) {
   const item = config.estados.find(e => e.valor === estado);
@@ -146,6 +192,7 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
   const [filterEstado, setFilterEstado] = useState('');
   const [filterOrigen, setFilterOrigen] = useState('');
   const [filterAsignado, setFilterAsignado] = useState('');
+  const [filterCurso, setFilterCurso] = useState('');
 
   const fetchConfig = useCallback(async () => {
     const r = await fetch(`${apiUrl}/api/crm/config`);
@@ -157,9 +204,10 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
     if (filterEstado) params.set('estado', filterEstado);
     if (filterOrigen) params.set('origen', filterOrigen);
     if (filterAsignado) params.set('asignado_a', filterAsignado);
+    if (filterCurso) params.set('curso', filterCurso);
     const r = await fetch(`${apiUrl}/api/crm/prospectos?${params}`);
     if (r.ok) setProspectos(await r.json());
-  }, [apiUrl, filterEstado, filterOrigen, filterAsignado]);
+  }, [apiUrl, filterEstado, filterOrigen, filterAsignado, filterCurso]);
 
   const fetchStats = useCallback(async () => {
     const r = await fetch(`${apiUrl}/api/crm/stats`);
@@ -178,7 +226,24 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
   }, [fetchConfig, fetchProspectos, fetchStats, fetchPlantillas]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
-  useEffect(() => { fetchProspectos(); }, [filterEstado, filterOrigen, filterAsignado]);
+  useEffect(() => { fetchProspectos(); }, [filterEstado, filterOrigen, filterAsignado, filterCurso]);
+
+  useEffect(() => {
+    const socket = io(apiUrl, { transports: ['websocket', 'polling'] });
+
+    socket.on('whatsapp:message', () => {
+      fetchProspectos();
+      fetchStats();
+    });
+
+    socket.on('whatsapp:status', () => {
+      fetchProspectos();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [apiUrl, fetchProspectos, fetchStats]);
 
   const handleExport = () => {
     const params = new URLSearchParams();
@@ -189,6 +254,15 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
   };
 
   const handleUpdateEstado = async (id: string, estado: string) => {
+    // Confirmar si es un estado terminal
+    const estadoConfig = config.estados.find(e => e.valor === estado);
+    if (estadoConfig && (estadoConfig.es_ganado || estadoConfig.es_perdido)) {
+      const icono = estadoConfig.es_ganado ? '🎉' : '⚠️';
+      const msg = estadoConfig.es_ganado
+        ? `${icono} ¿Confirmar como INSCRIPTO? Esta acción marca al prospecto como convertido.`
+        : `${icono} ¿Confirmar como DESCARTADO? Esta acción marca al prospecto como perdido.`;
+      if (!window.confirm(msg)) return;
+    }
     const r = await fetch(`${apiUrl}/api/crm/prospectos/${id}/estado`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado })
     });
@@ -196,6 +270,8 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
       setProspectos(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
       if (selectedProspecto?.id === id) setSelectedProspecto(prev => prev ? { ...prev, estado } : null);
       fetchStats();
+      if (estadoConfig?.es_ganado) toast.success('🎉 ¡Prospecto marcado como Inscripto!');
+      if (estadoConfig?.es_perdido) toast('Prospecto descartado', { icon: '📁' });
     } else toast.error('Error al actualizar estado');
   };
 
@@ -272,9 +348,9 @@ export default function CrmModule({ apiUrl, isSuperadmin, userPermissions, subVi
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pb-4">
-          {subView === 'dashboard' && <DashboardView stats={stats} config={config} onOpenProspecto={(id) => { openProspecto(id); onNavigate?.('lista'); }} />}
+          {subView === 'dashboard' && <DashboardView stats={stats} config={config} onOpenProspecto={async (id) => { await openProspecto(id); onNavigate?.('lista'); }} />}
           {subView === 'kanban' && <KanbanView prospectos={filtered} config={config} canEdit={canEdit} onEstadoChange={handleUpdateEstado} onOpen={openProspecto} onDelete={handleDelete} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
-          {subView === 'lista' && <ListaView prospectos={filtered} config={config} canEdit={canEdit} onEstadoChange={handleUpdateEstado} onOpen={openProspecto} onDelete={handleDelete} searchTerm={searchTerm} setSearchTerm={setSearchTerm} filterEstado={filterEstado} setFilterEstado={setFilterEstado} filterOrigen={filterOrigen} setFilterOrigen={setFilterOrigen} filterAsignado={filterAsignado} setFilterAsignado={setFilterAsignado} />}
+          {subView === 'lista' && <ListaView prospectos={filtered} config={config} canEdit={canEdit} onEstadoChange={handleUpdateEstado} onOpen={openProspecto} onDelete={handleDelete} searchTerm={searchTerm} setSearchTerm={setSearchTerm} filterEstado={filterEstado} setFilterEstado={setFilterEstado} filterOrigen={filterOrigen} setFilterOrigen={setFilterOrigen} filterAsignado={filterAsignado} setFilterAsignado={setFilterAsignado} filterCurso={filterCurso} setFilterCurso={setFilterCurso} />}
           {subView === 'plantillas' && <PlantillasView plantillas={plantillas} config={config} canEdit={canEdit} apiUrl={apiUrl} onRefresh={fetchPlantillas} />}
         </div>
       )}
@@ -676,6 +752,87 @@ function PlantillaModal({ plantilla, config, apiUrl, onClose, onSave }: { planti
 // ═══════════════════════════════════════════════════════════════════════════════
 // KANBAN
 // ═══════════════════════════════════════════════════════════════════════════════
+function KanbanDraggableCard({ p, onOpen, config, canEdit, onEstadoChange, isOverlay }: any) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: p.id,
+    data: { prospecto: p }
+  });
+  
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  return (
+    <div 
+      ref={isOverlay ? undefined : setNodeRef} 
+      style={style} 
+      {...(!isOverlay ? attributes : {})} 
+      {...(!isOverlay ? listeners : {})} 
+      className={`bg-white rounded-xl border shadow-sm p-3 hover:shadow-md transition-shadow relative ${isDragging && !isOverlay ? 'opacity-30' : 'opacity-100'} ${isOverlay ? 'shadow-xl ring-2 ring-[#00968f] cursor-grabbing rotate-2' : 'border-slate-100 cursor-grab active:cursor-grabbing'}`} 
+      onClick={() => { if(!isDragging && !isOverlay) onOpen(p.id) }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="font-bold text-slate-800 text-sm truncate">{p.nombre} {p.apellido}</p>
+            {p.fue_alumno && <span title="Ex alumno"><GraduationCap className="w-3.5 h-3.5 text-[#00968f] shrink-0" /></span>}
+          </div>
+          {p.curso_interes && <p className="text-[11px] text-slate-500 truncate">{p.curso_interes}</p>}
+          {p.pais && <p className="text-[10px] text-slate-400 flex items-center gap-0.5"><Globe className="w-2.5 h-2.5" /> {p.pais}</p>}
+        </div>
+        <OrigenBadge origen={p.origen} config={config} />
+      </div>
+      {/* Último contacto */}
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
+        <div className="flex items-center gap-1.5">
+          {p.telefono && (
+            <a href={`https://wa.me/${p.telefono.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} className="p-1.5 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-all relative z-10">
+              <MessageCircle className="w-3.5 h-3.5" />
+            </a>
+          )}
+          <ActivityBadge p={p} />
+        </div>
+        {canEdit && (
+          <select value={p.estado} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); onEstadoChange(p.id, e.target.value); }}
+            className="text-[10px] font-bold border-0 bg-transparent text-slate-500 cursor-pointer focus:ring-1 focus:ring-[#00968f] rounded-lg py-1 pr-1 relative z-10">
+            {config.estados.map((s: any) => <option key={s.id} value={s.valor}>{s.valor}</option>)}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KanbanDroppableColumn({ estado, col, collapsedCols, setCollapsedCols, config, canEdit, onEstadoChange, onOpen }: any) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: estado.valor,
+  });
+  const collapsed = collapsedCols.has(estado.valor);
+
+  return (
+    <div className="flex-shrink-0 w-72">
+      <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: estado.color + '44' }}>
+        <div className="flex items-center justify-between px-4 py-3 cursor-pointer select-none" style={{ backgroundColor: estado.color + '18' }} onClick={() => setCollapsedCols((prev: any) => { const s = new Set(prev); s.has(estado.valor) ? s.delete(estado.valor) : s.add(estado.valor); return s; })}>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: estado.color }} />
+            <span className="font-bold text-sm text-slate-800">{estado.valor}</span>
+            <span className="text-xs font-black px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: estado.color }}>{col.length}</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+        </div>
+        {!collapsed && (
+          <div ref={setNodeRef} className={`min-h-[120px] p-2 space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar transition-colors ${isOver ? 'bg-slate-200/50 ring-2 ring-inset ring-slate-300' : 'bg-slate-50'}`}>
+            {col.map((p: any) => (
+              <KanbanDraggableCard key={p.id} p={p} config={config} canEdit={canEdit} onEstadoChange={onEstadoChange} onOpen={onOpen} />
+            ))}
+            {col.length === 0 && <p className="text-center text-slate-400 text-xs py-8 pointer-events-none">Arrastrar prospectos aquí</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function KanbanView({ prospectos, config, canEdit, onEstadoChange, onOpen, searchTerm, setSearchTerm }: {
   prospectos: Prospecto[]; config: CrmConfig; canEdit: boolean;
   onEstadoChange: (id: string, estado: string) => void;
@@ -683,69 +840,77 @@ function KanbanView({ prospectos, config, canEdit, onEstadoChange, onOpen, searc
   searchTerm: string; setSearchTerm: (v: string) => void;
 }) {
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set(['Descartado']));
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  );
+
+  // Filtro local incluyendo teléfono
+  const filtered = prospectos.filter(p => {
+    if (!searchTerm) return true;
+    const t = searchTerm.toLowerCase();
+    return (
+      p.nombre.toLowerCase().includes(t) ||
+      p.apellido.toLowerCase().includes(t) ||
+      (p.telefono || '').replace(/\D/g, '').includes(t.replace(/\D/g, '')) ||
+      (p.email || '').toLowerCase().includes(t) ||
+      (p.pais || '').toLowerCase().includes(t)
+    );
+  });
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const prospectoId = active.id as string;
+    const newEstado = over.id as string;
+    
+    const prospecto = prospectos.find(p => p.id === prospectoId);
+    if (prospecto && prospecto.estado !== newEstado) {
+      if (canEdit) {
+        onEstadoChange(prospectoId, newEstado);
+      } else {
+        toast.error('No tienes permisos para cambiar estados');
+      }
+    }
+  };
+
+  const activeProspecto = activeId ? prospectos.find(p => p.id === activeId) : null;
 
   return (
     <div className="space-y-4">
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar prospecto..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#00968f] outline-none text-sm" />
+        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Nombre, teléfono, email..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#00968f] outline-none text-sm" />
       </div>
-      <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-        {config.estados.map(estado => {
-          const col = prospectos.filter(p => p.estado === estado.valor);
-          const collapsed = collapsedCols.has(estado.valor);
-          return (
-            <div key={estado.id} className="flex-shrink-0 w-72">
-              <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: estado.color + '44' }}>
-                <div className="flex items-center justify-between px-4 py-3 cursor-pointer select-none" style={{ backgroundColor: estado.color + '18' }} onClick={() => setCollapsedCols(prev => { const s = new Set(prev); s.has(estado.valor) ? s.delete(estado.valor) : s.add(estado.valor); return s; })}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: estado.color }} />
-                    <span className="font-bold text-sm text-slate-800">{estado.valor}</span>
-                    <span className="text-xs font-black px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: estado.color }}>{col.length}</span>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-                </div>
-                {!collapsed && (
-                  <div className="bg-slate-50 min-h-[120px] p-2 space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
-                    {col.map(p => (
-                      <div key={p.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onOpen(p.id)}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-slate-800 text-sm truncate">{p.nombre} {p.apellido}</p>
-                              {p.fue_alumno && <span title="Ex alumno"><GraduationCap className="w-3.5 h-3.5 text-[#00968f] shrink-0" /></span>}
-                            </div>
-                            {p.curso_interes && <p className="text-[11px] text-slate-500 truncate">{p.curso_interes}</p>}
-                            {p.pais && <p className="text-[10px] text-slate-400 flex items-center gap-0.5"><Globe className="w-2.5 h-2.5" /> {p.pais}</p>}
-                          </div>
-                          <OrigenBadge origen={p.origen} config={config} />
-                        </div>
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
-                          <div className="flex items-center gap-2">
-                            {p.telefono && (
-                              <a href={`https://wa.me/${p.telefono.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-all">
-                                <MessageCircle className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                            {p.asignado_a && <span className="text-[10px] text-slate-400 truncate max-w-[80px]">{p.asignado_a}</span>}
-                          </div>
-                          {canEdit && (
-                            <select value={p.estado} onClick={e => e.stopPropagation()} onChange={e => { e.stopPropagation(); onEstadoChange(p.id, e.target.value); }}
-                              className="text-[10px] font-bold border-0 bg-transparent text-slate-500 cursor-pointer focus:ring-1 focus:ring-[#00968f] rounded-lg py-1 pr-1">
-                              {config.estados.map(s => <option key={s.id} value={s.valor}>{s.valor}</option>)}
-                            </select>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {col.length === 0 && <p className="text-center text-slate-400 text-xs py-8">Sin prospectos</p>}
-                  </div>
-                )}
-              </div>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+          {config.estados.map(estado => {
+            const col = filtered.filter(p => p.estado === estado.valor);
+            return (
+              <KanbanDroppableColumn 
+                key={estado.id} estado={estado} col={col} 
+                collapsedCols={collapsedCols} setCollapsedCols={setCollapsedCols} 
+                config={config} canEdit={canEdit} onEstadoChange={onEstadoChange} onOpen={onOpen} 
+              />
+            );
+          })}
+        </div>
+        <DragOverlay zIndex={1000}>
+          {activeProspecto ? (
+            <div className="w-72">
+              <KanbanDraggableCard p={activeProspecto} config={config} canEdit={canEdit} onEstadoChange={onEstadoChange} onOpen={onOpen} isOverlay />
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
@@ -753,7 +918,7 @@ function KanbanView({ prospectos, config, canEdit, onEstadoChange, onOpen, searc
 // ═══════════════════════════════════════════════════════════════════════════════
 // LISTA
 // ═══════════════════════════════════════════════════════════════════════════════
-function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDelete, searchTerm, setSearchTerm, filterEstado, setFilterEstado, filterOrigen, setFilterOrigen, filterAsignado, setFilterAsignado }: any) {
+function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDelete, searchTerm, setSearchTerm, filterEstado, setFilterEstado, filterOrigen, setFilterOrigen, filterAsignado, setFilterAsignado, filterCurso, setFilterCurso }: any) {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">
@@ -773,8 +938,12 @@ function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDele
           <option value="">Todas las operadoras</option>
           {config.operadoras.map((o: CrmConfigItem) => <option key={o.id} value={o.valor}>{o.valor}</option>)}
         </select>
-        {(filterEstado || filterOrigen || filterAsignado || searchTerm) && (
-          <button onClick={() => { setFilterEstado(''); setFilterOrigen(''); setFilterAsignado(''); setSearchTerm(''); }} className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-semibold flex items-center gap-1">
+        <select value={filterCurso} onChange={e => setFilterCurso(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-[#00968f] outline-none">
+          <option value="">Todos los cursos</option>
+          {config.cursos.map((c: CrmConfigItem) => <option key={c.id} value={c.valor}>{c.valor}</option>)}
+        </select>
+        {(filterEstado || filterOrigen || filterAsignado || filterCurso || searchTerm) && (
+          <button onClick={() => { setFilterEstado(''); setFilterOrigen(''); setFilterAsignado(''); setFilterCurso(''); setSearchTerm(''); }} className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-semibold flex items-center gap-1">
             <X className="w-3.5 h-3.5" /> Limpiar
           </button>
         )}
@@ -786,7 +955,7 @@ function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDele
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {['Nombre', 'Contacto', 'País', 'Curso', 'Origen', 'Estado', 'Asignado', ''].map(h => (
+                {['Nombre', 'Contacto', 'País', 'Curso', 'Origen', 'Estado', 'Asignado', 'Últ. contacto', ''].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -822,6 +991,9 @@ function ListaView({ prospectos, config, canEdit, onEstadoChange, onOpen, onDele
                     ) : <EstadoBadge estado={p.estado} config={config} />}
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{p.asignado_a || '—'}</td>
+                  <td className="px-4 py-3">
+                    <ActivityBadge p={p} />
+                  </td>
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     {canEdit && (
                       <button onClick={() => onDelete(p.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
@@ -899,7 +1071,7 @@ function DrawerDetalle({ prospecto, plantillas, config, canEdit, onClose, onEsta
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-slate-700">Datos del Prospecto</h4>
               {canEdit && (
-                <button onClick={() => { if (editMode) onSave(prospecto.id, form); else setEditMode(true); }}
+                <button onClick={() => { if (editMode) { onSave(prospecto.id, form); setEditMode(false); } else setEditMode(true); }}
                   className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-semibold transition-all ${editMode ? 'bg-[#002d2b] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>
                   {editMode ? <><Check className="w-3.5 h-3.5" /> Guardar</> : <><Edit2 className="w-3.5 h-3.5" /> Editar</>}
                 </button>

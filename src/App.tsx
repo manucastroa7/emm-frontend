@@ -28,6 +28,10 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  TrendingUp,
+  GraduationCap,
+  CheckCheck,
+  Bell,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { type StudentData as BaseStudentData, getSubjectsByLicencia } from './services/pdfService';
@@ -114,6 +118,7 @@ function AppContent() {
   const crmSubView = crmSubViewMap[activeTab] ?? 'dashboard';
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [crmExpanded, setCrmExpanded] = useState(true);
+  const [analiticosExpanded, setAnaliticosExpanded] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -131,6 +136,12 @@ function AppContent() {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [importConfig, setImportConfig] = useState<{ isOpen: boolean; mode: 'db' | 'zip' | null }>({ isOpen: false, mode: null });
   const [diplomaModal, setDiplomaModal] = useState<{isOpen: boolean, student: StudentData | null}>({ isOpen: false, student: null });
+  const [crmStats, setCrmStats] = useState<any | null>(null);
+
+  useEffect(() => {
+    const unread = crmStats?.noLeidosChatsCount || 0;
+    document.title = unread > 0 ? `(${unread}) Escuela Maradona Menotti` : 'Escuela Maradona Menotti';
+  }, [crmStats?.noLeidosChatsCount]);
 
   // Gestión de usuarios
   const [appUsers, setAppUsers] = useState<any[]>([]);
@@ -345,12 +356,20 @@ function AppContent() {
           setActiveTab('dashboard');
         }
         fetchStudents();
+        fetchCrmStats();
       } catch (err) {
         console.error('Error al restaurar sesión:', err);
         localStorage.removeItem('mm-user');
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      fetchStudents();
+      fetchCrmStats();
+    }
+  }, [activeTab]);
 
 
   useEffect(() => {
@@ -418,6 +437,18 @@ function AppContent() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchCrmStats = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/crm/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setCrmStats(data);
+      }
+    } catch (err) {
+      console.error('Error al obtener estadísticas del CRM:', err);
     }
   };
 
@@ -1187,7 +1218,8 @@ function AppContent() {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-[#0ffff4]/20 bg-white/88 text-slate-800 placeholder:text-slate-500 focus:ring-2 focus:ring-[#00968f] focus:border-transparent outline-none transition-all shadow-[0_10px_35px_-30px_rgba(0,0,0,0.35)]"
+                className="w-full px-4 py-3 rounded-xl border border-[#0ffff4]/20 focus:ring-2 focus:ring-[#00968f] focus:border-transparent outline-none transition-all shadow-[0_10px_35px_-30px_rgba(0,0,0,0.35)]"
+                style={{ backgroundColor: '#ffffff', color: '#1e293b' }}
                 placeholder="DNI o email institucional"
                 required
               />
@@ -1199,7 +1231,8 @@ function AppContent() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-[#0ffff4]/20 bg-white/88 text-slate-800 placeholder:text-slate-500 focus:ring-2 focus:ring-[#00968f] focus:border-transparent outline-none transition-all shadow-[0_10px_35px_-30px_rgba(0,0,0,0.35)]"
+                  className="w-full px-4 py-3 rounded-xl border border-[#0ffff4]/20 focus:ring-2 focus:ring-[#00968f] focus:border-transparent outline-none transition-all shadow-[0_10px_35px_-30px_rgba(0,0,0,0.35)]"
+                  style={{ backgroundColor: '#ffffff', color: '#1e293b' }}
                   placeholder="Ingresa tu contraseña"
                   required
                 />
@@ -1236,6 +1269,7 @@ function AppContent() {
     const totalAlumnos = students.length;
     const conAnalitico = students.filter(s => s.notas && s.notas.length > 0).length;
     const sinAnalitico = totalAlumnos - conAnalitico;
+    const totalEmitidos = students.filter(s => s.estado_analitico === 'emitido').length;
 
     // Agrupar por Carrera
     const porCarrera = students.reduce((acc, curr) => {
@@ -1243,24 +1277,6 @@ function AppContent() {
       acc[c] = (acc[c] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-
-    // Emitidos por licencia
-    const emitidosPorLicencia = students
-      .filter(s => s.estado_analitico === 'emitido')
-      .reduce((acc, curr) => {
-        const c = curr.licencia || 'Sin licencia';
-        acc[c] = (acc[c] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-    // Analíticos completos por licencia
-    const completosPorLicencia = students
-      .filter(s => isAnaliticoCompleto(s))
-      .reduce((acc, curr) => {
-        const c = curr.licencia || 'Sin licencia';
-        acc[c] = (acc[c] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
 
     // Últimos 5 días emitidos
     const today = new Date();
@@ -1273,91 +1289,258 @@ function AppContent() {
       })
       .sort((a, b) => new Date(b.fecha_emision || '').getTime() - new Date(a.fecha_emision || '').getTime());
 
+    // CRM stats
+    const crmTotal = crmStats?.total ?? 0;
+    const crmActivos = crmStats?.activos ?? 0;
+    const crmInscriptos = crmStats?.inscriptos ?? 0;
+    const crmConversion = crmStats?.tasaConversion ?? 0;
+    const crmAlertas = crmStats?.alertasSeguimiento ?? [];
+
     return (
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h2 className="text-3xl font-bold text-slate-900 drop-shadow-sm">Dashboard General</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="kpi-card-total p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="text-slate-500 text-sm font-medium mb-3 uppercase tracking-wider">Total Alumnos</h3>
-            <p className="text-4xl font-extrabold value-text">{totalAlumnos}</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight dark:text-white drop-shadow-sm">
+              Dashboard General
+            </h2>
+            <p className="text-slate-500 text-sm mt-1 dark:text-slate-400">
+              Vista unificada comercial y académica de la Escuela
+            </p>
           </div>
-          <div className="kpi-card-completo p-6 rounded-2xl border border-emerald-200 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="lbl-text text-sm font-medium mb-3 uppercase tracking-wider">Con Analítico</h3>
-            <p className="text-4xl font-extrabold value-text">{conAnalitico}</p>
-          </div>
-          <div className="kpi-card-espera p-6 rounded-2xl border border-amber-200 shadow-sm hover:shadow-md transition-shadow">
-            <h3 className="lbl-text text-sm font-medium mb-3 uppercase tracking-wider">Esperando Notas</h3>
-            <p className="text-4xl font-extrabold value-text">{sinAnalitico}</p>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                fetchStudents();
+                fetchCrmStats();
+                toast.success('Datos actualizados');
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 font-bold text-sm rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all"
+            >
+              Actualizar
+            </button>
           </div>
         </div>
 
-        {/* Vista colapsada manual eliminada para favorecer navegación por sidebar */}
-
-
-        <div className="pt-6 border-t border-slate-200">
-          <h3 className="text-xl font-bold text-slate-800 mb-6 drop-shadow-sm">Distribucion por Licencia / Carrera</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {Object.entries(porCarrera).map(([carr, count]) => (
-              <div key={carr} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between hover:bg-slate-50 transition-colors">
-                <span className="font-semibold text-slate-700 line-clamp-1" title={carr}>{carr}</span>
-                <span className="distribution-badge px-4 py-1.5 rounded-full text-sm font-black shadow-inner border">{count}</span>
+        {/* METRICAS PRINCIPALES */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {/* Card 1: Total Alumnos (Académico) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
+              <GraduationCap className="w-32 h-32" style={{ color: 'var(--slate-900)' }} />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--slate-600)' }}>Padrón de Alumnos</span>
+              <div className="p-2 rounded-xl" style={{ backgroundColor: 'var(--slate-100)', color: 'var(--slate-600)' }}>
+                <GraduationCap className="w-5 h-5" />
               </div>
-            ))}
-            {Object.keys(porCarrera).length === 0 && (
-              <p className="text-slate-500 italic">Cargue el padron QUINTTOS para ver estadisticas.</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Emitidos por Licencia</h3>
-            <div className="space-y-3">
-              {Object.entries(emitidosPorLicencia).map(([lic, count]) => (
-                <div key={lic} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 bg-slate-50/60">
-                  <span className="font-semibold text-slate-700">{lic}</span>
-                  <span className="distribution-badge text-sm font-black rounded-full px-3 py-1 border">{count}</span>
-                </div>
-              ))}
-              {Object.keys(emitidosPorLicencia).length === 0 && (
-                <p className="text-slate-500 text-sm">Aún no hay analíticos emitidos.</p>
-              )}
+            </div>
+            <p className="text-4xl font-black" style={{ color: 'var(--slate-900)' }}>{totalAlumnos}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs font-semibold pt-2.5" style={{ color: 'var(--slate-600)', borderTop: '1px solid var(--slate-200)' }}>
+              <span className="text-emerald-500 font-extrabold">{conAnalitico} con analítico</span>
+              <span>•</span>
+              <span className="text-amber-500 font-extrabold">{sinAnalitico} pendientes</span>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Emitidos últimos 5 días</h3>
-            <div className="space-y-3">
-              {recentEmitidos.slice(0, 8).map((s, idx) => (
-                <div key={`${s.id}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 bg-[#0ffff4]/10">
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">{s.nombre}</p>
-                    <p className="text-xs text-slate-500">Licencia {s.licencia || 'S/LI'} · ID {s.dni}</p>
+          {/* Card 2: Prospectos Activos (CRM) */}
+          <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-32 h-32 text-indigo-600" />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-indigo-600 text-xs font-bold uppercase tracking-wider">Prospectos Activos</span>
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-4xl font-black" style={{ color: 'var(--slate-900)' }}>{crmActivos}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs font-semibold pt-2.5" style={{ color: 'var(--slate-600)', borderTop: '1px solid var(--slate-200)' }}>
+              <span>Total histórico: <strong style={{ color: 'var(--slate-800)' }}>{crmTotal}</strong></span>
+              <span>•</span>
+              <span className="text-emerald-500 font-extrabold">{crmInscriptos} inscriptos</span>
+            </div>
+          </div>
+
+          {/* Card 3: Tasa de Conversión (CRM) */}
+          <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
+              <CheckCheck className="w-32 h-32 text-emerald-600" />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-emerald-600 text-xs font-bold uppercase tracking-wider">Tasa de Conversión</span>
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                <CheckCheck className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-4xl font-black" style={{ color: 'var(--slate-900)' }}>{crmConversion}%</p>
+            <div className="mt-3 text-xs font-semibold pt-2.5" style={{ color: 'var(--slate-600)', borderTop: '1px solid var(--slate-200)' }}>
+              Eficiencia en inscripción de leads
+            </div>
+          </div>
+
+          {/* Card 4: Analíticos Emitidos (Académico) */}
+          <div className="bg-white p-6 rounded-2xl border border-[#0ffff4]/20 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
+              <CheckCircle2 className="w-32 h-32 text-[#00968f]" />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[#00968f] text-xs font-bold uppercase tracking-wider">Títulos Emitidos</span>
+              <div className="p-2 rounded-xl bg-[#0ffff4]/10 text-[#00968f]">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-4xl font-black" style={{ color: 'var(--slate-900)' }}>{totalEmitidos}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs font-semibold pt-2.5" style={{ color: 'var(--slate-600)', borderTop: '1px solid var(--slate-200)' }}>
+              <span>{students.filter(s => isAnaliticoCompleto(s) && s.estado_analitico !== 'emitido').length} listos para emitir</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CONTENIDO SECUNDARIO: TABLAS Y SEGUIMIENTO */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Card: Tareas de Seguimiento Comercial (CRM) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col min-w-0">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Seguimiento CRM Pendiente</h3>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
+                {crmAlertas.length} avisos
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-[380px] pr-2 space-y-3 custom-scrollbar">
+              {crmAlertas.length > 0 ? (
+                crmAlertas.map((al: any) => (
+                  <div key={al.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-100/50 transition-colors flex items-start justify-between gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <p className="font-bold text-slate-900 dark:text-white text-sm truncate">{al.nombre}</p>
+                      {al.nota && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic line-clamp-2">"{al.nota}"</p>
+                      )}
+                      <p className="text-[10px] text-indigo-500 dark:text-indigo-400 font-extrabold uppercase">
+                        Aviso: {al.fecha_proximo_aviso}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveTab('crm-wa');
+                      }}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#002d2b] bg-[#0ffff4] hover:bg-[#00968f] hover:text-white transition-all shadow-sm"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Contactar</span>
+                    </button>
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-[#00968f]">{s.fecha_emision}</span>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 text-center px-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-3 text-slate-400">
+                    <CheckCheck className="w-6 h-6 text-emerald-500" />
+                  </div>
+                  <p className="text-slate-900 dark:text-white font-bold text-sm">¡Al día!</p>
+                  <p className="text-xs text-slate-400 mt-1">No hay tareas de seguimiento pendientes para hoy.</p>
                 </div>
-              ))}
-              {recentEmitidos.length === 0 && (
-                <p className="text-slate-500 text-sm">Sin emisiones en los últimos 5 días.</p>
               )}
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Analíticos completos por Licencia</h3>
-            <div className="space-y-3">
-              {Object.entries(completosPorLicencia).map(([lic, count]) => (
-                <div key={lic} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 bg-slate-50/60">
-                  <span className="font-semibold text-slate-700">{lic}</span>
-                  <span className="text-sm font-black text-[#00968f] bg-[#0ffff4]/15 border border-[#0ffff4]/40 rounded-full px-3 py-1">{count}</span>
+          {/* Card: Últimas Emisiones (Académico) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col min-w-0">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-[#0ffff4]/10 text-[#00968f] dark:text-[#0ffff4] rounded-xl">
+                  <CheckCircle2 className="w-4 h-4" />
                 </div>
-              ))}
-              {Object.keys(completosPorLicencia).length === 0 && (
-                <p className="text-slate-500 text-sm">Sin analíticos completos aún.</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Últimos Analíticos Emitidos</h3>
+              </div>
+              <span className="text-xs font-bold text-slate-400">Últimos 5 días</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-[380px] pr-2 space-y-3 custom-scrollbar">
+              {recentEmitidos.length > 0 ? (
+                recentEmitidos.slice(0, 8).map((s: any, idx: number) => (
+                  <div key={`${s.id}-${idx}`} className="p-4 rounded-xl border border-[#0ffff4]/10 bg-[#0ffff4]/5 hover:bg-[#0ffff4]/10 transition-colors flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm">{s.nombre} {s.apellido || ''}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Licencia: <strong className="font-black text-[#00968f]">{s.licencia || 'S/LI'}</strong> · DNI: {s.dni}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-black uppercase bg-[#00968f]/10 text-[#00968f] dark:text-[#0ffff4] px-2.5 py-1 rounded-md border border-[#00968f]/20">
+                      {s.fecha_emision}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 text-center px-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-3 text-slate-400">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <p className="text-slate-900 dark:text-white font-bold text-sm">Sin emisiones</p>
+                  <p className="text-xs text-slate-400 mt-1">No se registran analíticos emitidos en los últimos 5 días.</p>
+                </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* TERCERA FILA: DISTRIBUCION Y METRICAS POR ESTADO */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-slate-200 dark:border-slate-700/50">
+          
+          {/* Distribución por Carrera */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="text-lg font-bold mb-5" style={{ color: 'var(--slate-900)' }}>Distribución por Carrera / Licencia</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(porCarrera).map(([carr, count]) => (
+                <div key={carr} className="p-4 rounded-xl flex items-center justify-between transition-colors" style={{ backgroundColor: 'var(--slate-100)', border: '1px solid var(--slate-200)' }}>
+                  <span className="font-semibold text-sm truncate pr-2" style={{ color: 'var(--slate-900)' }} title={carr}>{carr}</span>
+                  <span className="distribution-badge px-3 py-1 rounded-full text-xs font-black shadow-inner">{count} alumnos</span>
+                </div>
+              ))}
+              {Object.keys(porCarrera).length === 0 && (
+                <p className="text-slate-500 italic text-sm col-span-2">Cargue el padrón QUINTTOS para ver estadísticas.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Resumen por Estado de Prospecto (CRM) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+            <h3 className="text-lg font-bold mb-5" style={{ color: 'var(--slate-900)' }}>Embudo Comercial</h3>
+            <div className="space-y-4 flex-1 flex flex-col justify-center">
+              {crmStats?.porEstado && crmStats.porEstado.length > 0 ? (
+                crmStats.porEstado.slice(0, 5).map((pe: any) => {
+                  const pct = crmStats.total > 0 ? Math.round((pe.count / crmStats.total) * 100) : 0;
+                  return (
+                    <div key={pe.estado} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold" style={{ color: 'var(--slate-900)' }}>{pe.estado}</span>
+                        <span className="font-black" style={{ color: 'var(--slate-600)' }}>{pe.count} ({pct}%)</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--slate-200)' }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: pe.color || '#3B82F6'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="italic text-sm text-center" style={{ color: 'var(--slate-500)' }}>No hay datos comerciales registrados.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     );
   };
@@ -2540,35 +2723,53 @@ function AppContent() {
         </button>
 
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-          {/* SECCIÓN DASHBOARD */}
-          {(isSuperadmin || user.permissions?.['analiticos'] === 'editor') && (
+          {/* DASHBOARD GENERAL */}
+          {user.role !== 'student' && (isSuperadmin || hasAnaliticosAccess || hasCrmAccess) && (
             <div className="space-y-1">
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#0ffff4]/60 mb-1 mt-3">General</p>}
-              {sidebarCollapsed && <div className="h-4" />}
+              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#0ffff4]/60 mb-1 mt-1">General</p>}
               <button
                 onClick={() => setActiveTab('dashboard')}
                 title="Dashboard General"
                 className={`sidebar-link ${activeTab === 'dashboard' ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
               >
-                <LayoutDashboard className="w-5 h-5 shrink-0" />
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Dashboard General</span>}
               </button>
             </div>
           )}
 
-          {/* SECCIÓN ANALÍTICOS */}
+          {/* SECCIÓN ANALÍTICOS — grupo colapsable */}
           {user.role !== 'student' && hasAnaliticosAccess && (
-            <div className="space-y-1">
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#0ffff4]/60 mb-1 mt-3">Padrón</p>}
-              {sidebarCollapsed && <div className="h-2" />}
-              <button
-                onClick={() => setActiveTab('alumnos')}
-                title="Alumnos"
-                className={`sidebar-link ${activeTab === 'alumnos' ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
-              >
-                <Users className="w-5 h-5 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Alumnos</span>}
-              </button>
+            <div className="space-y-0.5">
+              {/* Header del grupo Analíticos */}
+              {!sidebarCollapsed ? (
+                <button
+                  onClick={() => setAnaliticosExpanded(e => !e)}
+                  className="w-full flex items-center justify-between px-3 py-1 mt-3 mb-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#0ffff4]/60 hover:text-white/70 transition-colors rounded-lg hover:bg-white/5 group"
+                >
+                  <span>ANALÍTICOS</span>
+                  <ChevronDown
+                    className="w-3 h-3 transition-transform duration-200"
+                    style={{ transform: analiticosExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                  />
+                </button>
+              ) : (
+                <div className="h-2" />
+              )}
+
+              {/* Sub-ítems: visibles si expandido */}
+              {(analiticosExpanded || sidebarCollapsed) && (
+                <div className={`space-y-0.5 ${!sidebarCollapsed ? 'pl-2 border-l border-white/10 ml-3' : ''}`}>
+                  <button
+                    onClick={() => setActiveTab('alumnos')}
+                    title="Alumnos"
+                    className={`sidebar-link ${activeTab === 'alumnos' ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
+                  >
+                    <Users className="w-4 h-4 shrink-0" />
+                    {!sidebarCollapsed && <span className="truncate">Alumnos</span>}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2613,9 +2814,14 @@ function AppContent() {
                   </button>
 
                   <button onClick={() => { setActiveTab('crm-wa'); setCrmExpanded(true); }} title="Bandeja WhatsApp"
-                    className={`sidebar-link ${activeTab === 'crm-wa' ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}>
-                    <MessageCircle className="w-4 h-4 shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">Bandeja WA</span>}
+                    className={`sidebar-link ${activeTab === 'crm-wa' ? 'sidebar-link-active' : 'sidebar-link-inactive'} relative`}>
+                    <div className="relative flex items-center justify-center shrink-0">
+                      <MessageCircle className="w-4 h-4 shrink-0" />
+                      {crmStats?.noLeidosChatsCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 h-2.5 w-2.5 rounded-full bg-red-500 border border-brand-sidebar" />
+                      )}
+                    </div>
+                    {!sidebarCollapsed && <span className="truncate ml-2">Bandeja WA</span>}
                   </button>
 
                   <button onClick={() => { setActiveTab('crm-plantillas'); setCrmExpanded(true); }} title="Plantillas WA"
@@ -2627,29 +2833,22 @@ function AppContent() {
               )}
             </div>
           )}
-
-          {/* SECCIÓN Gestión Usuarios */}
-          {canManageUsers && (
-            <div className="space-y-1">
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#0ffff4]/60 mb-1 mt-3">Seguridad</p>}
-              {sidebarCollapsed && <div className="h-2" />}
-              <button
-                onClick={() => { setActiveTab('usuarios'); fetchAppUsers(); }}
-                title="Gestión de Usuarios"
-                className={`sidebar-link ${activeTab === 'usuarios' ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
-              >
-                <UserPlus className="w-5 h-5 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Gestión de Usuarios</span>}
-              </button>
-            </div>
-          )}
         </nav>
 
         {/* User info & logout */}
         <div className="p-3 bg-white/5 mt-auto border-t border-white/10 shrink-0">
           {sidebarCollapsed ? (
             <div className="flex flex-col items-center gap-2">
-              <div className="bg-white/10 p-2 rounded-xl ring-2 ring-[#0ffff4]/25">
+              {canManageUsers && (
+                <button
+                  onClick={() => { setActiveTab('usuarios'); fetchAppUsers(); }}
+                  title="Gestión de Usuarios"
+                  className={`sidebar-btn-secondary w-10 h-10 flex items-center justify-center rounded-xl transition-all ${activeTab === 'usuarios' ? '!bg-[#0ffff4] !text-[#002d2b]' : ''}`}
+                >
+                  <UserPlus className="w-4 h-4" />
+                </button>
+              )}
+              <div className="bg-white/10 p-2 rounded-xl ring-2 ring-[#0ffff4]/25 mt-1">
                 <User className="w-5 h-5 text-[#0ffff4]" />
               </div>
               <button
@@ -2669,13 +2868,25 @@ function AppContent() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 px-1">
+              {canManageUsers && (
+                <button
+                  onClick={() => { setActiveTab('usuarios'); fetchAppUsers(); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-sm font-bold ${activeTab === 'usuarios' ? 'sidebar-link-active' : 'sidebar-btn-secondary'}`}
+                >
+                  <UserPlus className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Gestión de Usuarios</span>
+                </button>
+              )}
+              
+              <div className="flex items-center gap-3 px-1 mt-1">
                 <div className="bg-white/10 p-2.5 rounded-xl shadow-sm ring-2 ring-[#0ffff4]/25 shrink-0">
                   <User className="w-5 h-5 text-[#0ffff4]" />
                 </div>
                 <div className="flex flex-col overflow-hidden min-w-0">
                   <span className="sidebar-user-name text-sm font-semibold truncate" title={user.name}>{user.name}</span>
-                  <span className="sidebar-user-role text-[11px] font-black uppercase tracking-wider mt-0.5">{user.role}</span>
+                  <span className="sidebar-user-role text-[11px] font-black uppercase tracking-wider mt-0.5">
+                    {user.role === 'superadmin' ? 'Administrador General' : user.role === 'editor' ? 'Editor' : user.role === 'viewer' ? 'Lector' : 'Alumno'}
+                  </span>
                 </div>
               </div>
 

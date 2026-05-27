@@ -11,6 +11,8 @@
 
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ---- Paleta del Manual de Marca & Mapeos de Tema ---- */
 @theme {
   /* Colores primarios fijos */
@@ -559,4 +561,3 @@ aside.bg-brand-sidebar p {
 .sidebar-theme-inactive:hover {
   color: #FFFFFF !important;
 }
-

@@ -537,7 +537,7 @@ export default function WhatsAppInbox({ apiUrl, estados, canEdit, onCrmChanged, 
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {unread > 0 && (
-                        <span className="min-w-5 h-5 px-1.5 rounded-full bg-[#00968f] text-white text-[10px] font-black flex items-center justify-center">
+                        <span className="min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
                           {unread > 99 ? '99+' : unread}
                         </span>
                       )}
